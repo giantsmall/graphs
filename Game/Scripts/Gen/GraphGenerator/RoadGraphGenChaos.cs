@@ -590,7 +590,7 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
                             {
                                 height0Triangles.Add(triangleEdges.ToArray());
                                 Debug.LogWarning($"Cannot remove triangle with edges {edgeI.Id}, {edgeJ.Id}, {edgeK.Id} because no removable edge found.(TotalLen = {totalLens.Last()})");
-                                RemoveANY EDGEFROM EMPTYTRIANGLE
+                                //RemoveANY EDGEFROM EMPTYTRIANGLE
                             }
                             else
                             {
