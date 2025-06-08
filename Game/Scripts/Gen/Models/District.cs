@@ -20,8 +20,8 @@ namespace Assets.Game.Scripts.Gen.Models
 
         public List<Block> Blocks { get; protected set; } = new();
         //protected List<PtWSgmnts>[] pointGroups;
-        public List<Street> bStr = new List<Street>();
-        internal List<PtWSgmnts> intersections;
+        public List<Street> bStr = new();
+        internal List<PtWSgmnts> intersections = new();
 
         public District(params Vector2[] vertices) : base(vertices)
         {
@@ -51,11 +51,16 @@ namespace Assets.Game.Scripts.Gen.Models
         public void RefreshPtsFromRoads(bool FirstForlastRoad = true)
         {
             var r1InnPts = bStr[0].GetPointsUntilInnerCircle();
-            var r2InnPts = bStr[2].GetPointsUntilInnerCircle(FirstForlastRoad).Reversed();
             var InnCirPts = bStr[1].points.TakeLesserRangeWrapped(bStr[0].InnerCircleInters, bStr[2].InnerCircleInters, false);
+            var r2InnPts = bStr[2].GetPointsUntilInnerCircle(FirstForlastRoad).Reversed();
+
             var pointArrays = new List<PtWSgmnts>[] { r1InnPts, InnCirPts, r2InnPts };
             var many = pointArrays.SelectMany(p => p).ToList();
             this.points = many.Distinct(new PointsComparer(true)).ToList();
+            this.points.Clear();
+            this.points.AddRange(r1InnPts);
+            this.points.AddRange(InnCirPts);
+            this.points.AddRange(r2InnPts);
         }
 
         [Obsolete]
@@ -161,18 +166,6 @@ namespace Assets.Game.Scripts.Gen.Models
             return list;
         }
 
-        internal Rect GetRectangleCircumscribedInPolygon()
-        {
-            var pts = this.points.OrderBy(p => p.pos.x).ToList();
-            var minX = pts[0].pos.x;
-            var maxX = pts.Last().pos.x;
-
-            pts = this.points.OrderBy(p => p.pos.y).ToList();
-            var minY = pts[0].pos.y;
-            var maxY = pts.Last().pos.y;
-            return new Rect(new Vector2(minX, minY), new Vector2(maxX - minX, maxY - minY));
-        }
-
         internal void ReorderPointsByAngle()
         {
             var center = this.FindCenter();
@@ -213,7 +206,7 @@ namespace Assets.Game.Scripts.Gen.Models
 
                 // Spróbuj posortowaæ, jeœli s¹ duplikaty
                 var center = this.FindCenter();
-                var distinctPts = this.points.Distinct(new PointsComparer()).ToList();
+                var distinctPts = this.points.Distinct(new PointsComparer(false)).ToList();
                 if (distinctPts.Count < this.points.Count)
                 {
                     this.points = this.points

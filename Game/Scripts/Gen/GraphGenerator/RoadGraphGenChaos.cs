@@ -1,8 +1,10 @@
 using Assets.Game.Scripts.Editors;
 using Assets.Game.Scripts.Gen.Models;
 using Assets.Game.Scripts.Utility;
+using ClipperLib;
 using Delaunay;
 using NUnit.Framework;
+using SharpGraph;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -21,6 +23,7 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
     //See with strange wields      : ff89438a-e1d3-422c-b6e9-aa88191b2c12
     public class RoadGraphGenChaos : MonoBehaviour
     {
+        public static float maxStreetLen = 3f;
         static List<int> seedValues = new List<int>();
         static int currentSeed = 0;
         public bool DrawTriangles = true;
@@ -35,7 +38,7 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
         public bool InsertIntersections = true;
 
         public float MinEdgeLength = 2f;
-        public float MinBlockPtsRad = 8f;
+        public float MinBlockPtsRad = 6f;
         public float minPtsDistToNoTWield = 1f;
 
         public int Population = 600;
@@ -54,7 +57,7 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
         }
 
         public static void ClearLog()
-        {            
+        {
 #if UNITY_EDITOR
             var assembly = Assembly.GetAssembly(typeof(UnityEditor.Editor));
             var type = assembly.GetType("UnityEditor.LogEntries");
@@ -62,11 +65,11 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
             method.Invoke(new object(), null);
 #endif
         }
-       
+
         #region Works
         public void GeneratePrev()
         {
-            if(seedValues.Any())
+            if (seedValues.Any())
             {
                 currentSeed = Math.Max(currentSeed - 1, 0);
                 Randomize = false;
@@ -75,9 +78,9 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
         }
 
         public void GenerateNext()
-        {            
+        {
             if (Randomize)
-            {                
+            {
                 Seed = Guid.NewGuid().ToString();
                 MD5 md5Hasher = MD5.Create();
                 var hashed = md5Hasher.ComputeHash(Encoding.UTF8.GetBytes(Seed));
@@ -87,7 +90,7 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
                 currentSeed = seedValues.Count - 1;
             }
 
-            if(!seedValues.Any())
+            if (!seedValues.Any())
             {
                 MD5 md5Hasher = MD5.Create();
                 var hashed = md5Hasher.ComputeHash(Encoding.UTF8.GetBytes(Seed));
@@ -103,19 +106,22 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
         void Generate()
         {
             PtWSgmnts.ResetCount();
+            LineSegment.ResetCount();
             ClearLog();
             Population = 600;
 
             var center = new Vector2(MapSize / 2f, MapSize / 2f);
             center += new Vector2(rnd.NextFloat(-5, 5), rnd.NextFloat(-5, 5));
             s = new SettlementModel(new PtWSgmnts(center));
-            CreateMainRoadsAndInitiallyMerge();
-            CreateInnerCircle();
-            AddRoadToFillGaps();
-            OrderRoadsAndGateByAngle();
+            //CreateMainRoadsAndInitiallyMerge();
 
-            DefineDistrictsWithinInnerCircle();
-            SplitDistrictsIntoBlocks();
+            //CreateInnerCircle();
+            //AddRoadToFillGaps();
+            //OrderRoadsAndGateByAngle();
+
+            //DefineDistrictsWithinInnerCircle();
+            //SplitDistrictsIntoBlocks();
+            SplitInnerCirleIntoBlocks();
 
             AddVoronoisOutputToLists();
         }
@@ -177,7 +183,6 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
                 }
             }
         }
-        public static float maxStreetLen = 3f;
 
         void CreateInnerCircle()
         {
@@ -200,12 +205,19 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
                 pts.Add(point);
                 currAngle += angle;
             }
-            s.innerCircleStreet = new (pts.Select(p => new PtWSgmnts(p)).ToList());
+            s.innerCircleStreet = new(pts.Select(p => new PtWSgmnts(p)).ToList());
+            for (int i = 0; i < s.innerCircleStreet.points.Count; i++)
+            {
+                var curr = s.innerCircleStreet.points[i];
+                var next = s.innerCircleStreet.points.Neighbour(i, 1);
+                var prev = s.innerCircleStreet.points.Neighbour(i, -1);
+            }
+
             s.innerCircleStreet.points.Add(s.innerCircleStreet.points[0]);
             foreach (var road in s.notJoinedRoads)
             {
                 BuildIntersectionWithInnerCircle(road);
-            }                        
+            }
         }
 
         PtWSgmnts BuildIntersectionWithInnerCircle(LineSegment mainRoad)
@@ -223,7 +235,7 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
                 }
             }
 
-            if(insertIndex < 0)
+            if (insertIndex < 0)
             {
                 intersVector = VectorIntersect.GetIntersectionPoint(innerPts[0].pos, innerPts.Last().pos, mainRoad.p0.pos, mainRoad.p1.pos);
                 if (intersVector != null)
@@ -310,7 +322,7 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
             }
         }
         #endregion
-
+        [Obsolete]
         void DefineDistrictsWithinInnerCircle()
         {
             for (int i = 0; i < s.notJoinedRoads.Count - 1; i++)
@@ -319,15 +331,18 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
             }
             DefineInitialDistrict(s.notJoinedRoads.Last(), s.notJoinedRoads[0], true);
         }
-
-        void DefineInitialDistrict(Street r1, Street r2, bool draw = false)            
+        [Obsolete]
+        void DefineInitialDistrict(Street r1, Street r2, bool draw = false)
         {
-            var road1InnerPoints = r1.GetPointsUntilInnerCircle();
-            var road2InnerPoints = r2.GetPointsUntilInnerCircle(false);
-            var innerCirclePoints = s.innerCircleStreet.points.TakeLesserRangeWrapped(r1.InnerCircleInters, r2.InnerCircleInters, false).Reversed();
-            var streets = new List<Street>() { r1, s.innerCircleStreet, r2};
+            //var road1InnerPoints = r1.GetPointsUntilInnerCircle();
+            //var road2InnerPoints = r2.GetPointsUntilInnerCircle(false);
+            //var innerCirclePoints = s.innerCircleStreet.points.TakeLesserRangeWrapped(r1.InnerCircleInters, r2.InnerCircleInters, false).Reversed();
+            var streets = new List<Street>() { r1, s.innerCircleStreet, r2 };
             var d = new District(streets);
             s.InnerDistricts.Add(d);
+
+            if (d.points.Count < 3)
+                Debug.LogWarning($"District points: = {d.points.Count}");
         }
 
 
@@ -335,6 +350,60 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
         {
             s.mainRoads = s.mainRoads.OrderBy(r => s.innerCircleStreet.points.IndexOf(r.InnerCircleInters)).ToList();
             s.notJoinedRoads = s.notJoinedRoads.OrderBy(r => s.innerCircleStreet.points.IndexOf(r.InnerCircleInters)).ToList();
+        }
+
+        void RemoveDuplicatesOf(LineSegment ls, bool confirm0Duplicates = false)
+        {
+            allEdges = allEdges.OrderBy(e => e.Id).ToList();
+            var duplicates = allEdges.Where(e => e.EdgeIds.Contains(ls.p0.Id) && e.EdgeIds.Contains(ls.p1.Id) && e.Id != ls.Id).ToList();
+
+            if (confirm0Duplicates || duplicates.Any())
+            {
+                Debug.Log($"Removed {duplicates.Count} duplicates of edge ({ls.Id}):{ls.p0.Id} <-> {ls.p1.Id}");
+            }
+            if (duplicates.Any())
+            {
+                allEdges.RemoveList(duplicates);
+            }
+        }
+
+
+        void RemoveDuplicates()
+        {
+            allEdges = allEdges.OrderBy(e => e.Id).ToList();
+            for (int i = 0; i < allEdges.Count; i++)
+            {
+                RemoveDuplicatesOf(allEdges[i]);
+            }
+        }
+
+        void GetCoveringLines(LineSegment ls)
+        {
+            for (int i = 0; i < allEdges.Count; i++)
+            {
+                if (allEdges[i].Id != ls.Id)
+                {
+                    var edgeI = allEdges[i];
+                    var e1P0One2 = ParcelGenerator.IsPointOnSegment(edgeI.p0.pos, (Vector2)ls.p0.pos, (Vector2)ls.p1.pos);
+                    var e1P1OnE2 = ParcelGenerator.IsPointOnSegment(edgeI.p1.pos, (Vector2)ls.p0.pos, (Vector2)ls.p1.pos);
+                    var e2P0One1 = ParcelGenerator.IsPointOnSegment((Vector2)ls.p0.pos, edgeI.p0.pos, edgeI.p1.pos);
+                    var e2P1OnE1 = ParcelGenerator.IsPointOnSegment((Vector2)ls.p1.pos, edgeI.p1.pos, edgeI.p1.pos);
+                    if ((e1P0One2 && e1P1OnE2) || (e2P0One1 && e2P1OnE1))
+                    {
+                        
+                    }
+                }
+            }
+
+            
+        }
+
+        void GetCoveringLines(List<LineSegment> lines)
+        {
+            foreach(var line in lines)
+            {
+                GetCoveringLines(line);
+            }
         }
 
         float EPSILON = 0.001f;
@@ -350,7 +419,99 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
         List<PtWSgmnts> allNodes = new List<PtWSgmnts>();
         List<LineSegment> allEdges = new List<LineSegment>();
 
+        List<PtWSgmnts> IdentifyNeighboursWIthtoutEdges(PtWSgmnts pt, Color color)
+        {
+            var existingEdges = allEdges.Where(e => e.EdgeIds.Contains(pt.Id)).ToList();
+            var p1NeighbourdsWithEdges = existingEdges.SelectMany(e => e.EdgePoints).Distinct(new PointsComparer(true)).Where(p => p.Id != pt.Id).ToList();
+            var PtsWithoutEdges = pt.Neighbours.Except(p1NeighbourdsWithEdges).ToList();
+
+            //foreach (var loosePoint in PtsWithoutEdges)
+            //{
+            //    Debug.DrawRay(loosePoint.pos, Vector2.up, color);
+            //}
+            //foreach (var edge in existingEdges)
+            //{
+            //    break;
+            //    Debug.DrawLine(edge.p0.pos, edge.p1.pos, color);
+            //}
+            //pt.Neighbours = pt.Neighbours.Except(PtsWithoutEdges).ToList();
+            Debug.Log($"Removed {PtsWithoutEdges.Count} neighbours for point {pt.Id}. New neighbours count: {pt.Neighbours.Count}");
+            return PtsWithoutEdges;
+        }
+
+         List<LineSegment> GetExistingEdgesOnly(PtWSgmnts pt, Color color)
+        {
+            var existingEdges = allEdges.Where(e => e.EdgeIds.Contains(pt.Id)).ToList();
+            return existingEdges;
+        }
+
+
         //2e9c1b25-90c6-4969-b4ad-7d891a15a2cf
+
+
+        void AddInnerCircleEdges(List<LineSegment> edges, Street innerCircle)
+        {
+
+        }
+
+        void SplitInnerCirleIntoBlocks()
+        {
+            intersections.Clear();
+            duplicatedNodes.Clear();
+            MissingEdges.Clear();
+            facesExtracted.Clear();
+            allEdges.Clear();
+            allNodes.Clear();
+            lonelyPts.Clear();
+            deadEnds.Clear();
+            LoseEdges.Clear();
+            ZeroLenEdges.Clear();
+            overlappingEdges.Clear();
+            distVEdges.Clear();
+            districtDiagrams.Clear();
+            ptsInserts.Clear();
+            closePoints.Clear();
+
+
+            var innerCircle = s.innerCircleStreet;
+            var center = s.innerCircleStreet.FindCenter();
+
+            var rect = innerCircle.GetRectangleCircumscribedInPolygon(.1f);
+            var pts = PoissonDiscSampler2D.GeneratePoints(rnd, MinBlockPtsRad, rect);
+
+            Voronoi v = new Voronoi(pts, rect);
+            var it = 100;
+            while (v.DelaunayTriangulation().Count < 4 && it > 0)
+            {
+                if (rect.size == Vector2.zero)
+                {
+                    Debug.LogWarning("PoissonDisc rect size = 0!!!");
+                    return;
+                }
+                v = new Voronoi(pts, rect);
+                if (it-- < 0)
+                {
+                    pts = PoissonDiscSampler2D.GeneratePoints(rnd, MinBlockPtsRad, rect);
+                    v = new Voronoi(pts, rect);
+                }
+            }
+            districtDiagrams.Add(v);
+
+            var edges = v.VoronoiDiagram();
+            JoinSamePosPtsAndRemoveEmptyLines(edges);
+            AddInnerCircleEdges(edges, innerCircle);
+            
+
+
+            //IdentifyDistrictIntersections();
+            //RemoveOutsideEdges(d, edges);
+
+            //JoinSamePosPtsAndRemoveEmptyLines(edges);
+            //RemoveLoseEdges(d, edges);
+            //WieldPtsThatAreTooClose(d, edges, center, minPtsDistToNoTWield);
+        }
+
+
         void SplitDistrictsIntoBlocks()
         {
             intersections.Clear();
@@ -367,186 +528,413 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
             distVEdges.Clear();
             districtDiagrams.Clear();
             ptsInserts.Clear();
+            closePoints.Clear();
 
             foreach (var d in s.InnerDistricts)
             {
                 var center = d.FindCenter();
                 var rect = d.GetRectangleCircumscribedInPolygon();
                 var pts = PoissonDiscSampler2D.GeneratePoints(rnd, MinBlockPtsRad, rect);
-                
-                Voronoi v = new Voronoi(pts, rect); ;
-                while (v.DelaunayTriangulation().Count < 4)
+
+                Voronoi v = new Voronoi(pts, rect);
+                var it = 100;
+                while (v.DelaunayTriangulation().Count < 4 && it > 0)
                 {
-                    v = new Voronoi(pts, rect);                                                            
+                    if(rect.size == Vector2.zero)
+                    {
+                        Debug.LogWarning("PoissonDisc rect size = 0!!!");
+                        return;
+                    }
+                    v = new Voronoi(pts, rect);
+                    if(it-- < 0)
+                    {
+                        pts = PoissonDiscSampler2D.GeneratePoints(rnd, MinBlockPtsRad, rect);
+                        v = new Voronoi(pts, rect);
+                    }
                 }
                 districtDiagrams.Add(v);
 
                 var edges = v.VoronoiDiagram();
-
                 JoinSamePosPtsAndRemoveEmptyLines(edges);
-                IdentifyIntersections(d, edges, center);
-                RemoveOutsideEdges(d, edges);
-                //RemoveEdgesWIthOutsidePoints(d, edges);
+
+                //IdentifyDistrictIntersections(d, edges, center);
+                //RemoveOutsideEdges(s.OuterCircle, edges);
+
+                //JoinSamePosPtsAndRemoveEmptyLines(edges);
                 //RemoveLoseEdges(d, edges);
-
-                Debug.LogWarning("Mergin - merge also relations");
-                var invalidEdges = edges.Where(e => e.p0.Id == e.p1.Id).ToList();
-                edgesDict.Add(d, edges.Except(InvalidEdges).ToList());
-                distVEdges.AddRange(edgesDict[d]);
-
-                if (InsertIntersections)
-                    d.RefreshPtsFromRoads();
+                //WieldPtsThatAreTooClose(d, edges, center, minPtsDistToNoTWield);
+                edgesDict.Add(d, edges);
             }
+
+            AddIdentifiedIntersectionsToStreets();
 
             foreach (var d in s.InnerDistricts)
             {
+                d.RefreshPtsFromRoads();
                 invalidTriangles.Clear();
                 AddDistrictEdges(d, edgesDict[d], s.InnerDistricts.IndexOf(d));
                 JoinSamePosPtsAndRemoveEmptyLines(edgesDict[d]);
-                GetRidOfFlatTriangles(d, minPtsDistToNoTWield);                
-                allEdges.AddRange(edgesDict[d]);                
+                //GetRidOfSeparatePointsTooClose
+                //ToEdges(edgesDict[d], minPtsDistToNoTWield);                
+                RemoveEdgesWIthPointsOutside(d, edgesDict[d]);
+                allEdges.AddRange(edgesDict[d]);
             }
-            Debug.Log($"All edges: {allEdges.Count}");
-            var allPts = allEdges.SelectMany(e => e.EdgePoints).Distinct(new PointsComparer(true)).ToList();
-            var allNeighbours = allPts.Select(p => p.Neighbours.Count).ToList();
-            var avgNighbourds = allNeighbours.Average();
-            var minNeighbourds = allNeighbours.Min();
-            var maxNeighbourds = allNeighbours.Max();
-            Debug.Log($"Neighbours stats: totalPts = {allPts.Count} avg = {avgNighbourds}, min = {minNeighbourds}, max = {maxNeighbourds}");
-            allPts = allEdges.SelectMany(e => e.EdgePoints).Distinct(new PointsComparer(true)).ToList();
-            allNeighbours = allPts.Select(p => p.Neighbours.Count).ToList();
-            avgNighbourds = allNeighbours.Average();
-            minNeighbourds = allNeighbours.Min();
-            maxNeighbourds = allNeighbours.Max();
-            Debug.Log($"Neighbours stats: totalPts = {allPts.Count} avg = {avgNighbourds}, min = {minNeighbourds}, max = {maxNeighbourds}");
-            //AddIntersectionsToStreets();
 
+            IdentifyCoveringEdges();
+            JoinSamePosPtsAndRemoveEmptyLines(allEdges);
+            RemoveDuplicates();
+
+
+
+            {
+                //foreach (var d in s.InnerDistricts)
+                //{
+                //    var newPts = d.CheckForDistrictEdgePoints(s);
+                //    d.ReorderPointsByAngle();
+                //}
+
+                //foreach (var d in s.InnerDistricts)
+                //{
+                //    var allPoints = edgesDict[d].SelectMany(e => e.EdgePoints).ToList();
+                //    var lonelyPtsTmp = allPoints
+                //        .Where(p => allPoints.Count(p2 => Vector2.Distance(p.pos, p2.pos) < .2f) < 2)
+                //        .Distinct(new PointsComparer())
+                //        .ToList();
+                //    AddDistrictEdges(d, edgesDict[d], s.InnerDistricts.IndexOf(d));
+                //    edgesDict[d].ForEach(e => e.p0.AddNeighbour(e.p1));
+                //    RemoveLoseEdges(d, edgesDict[d]);
+                //    RemoveOutsideEdges(d, edgesDict[d]);
+                //    allPoints = edgesDict[d].SelectMany(e => e.EdgePoints).ToList();
+                //    lonelyPtsTmp = allPoints
+                //        .Where(p => allPoints.Count(p2 => Vector2.Distance(p.pos, p2.pos) < .2f) < 2)
+                //        .Distinct(new PointsComparer())
+                //        .ToList();
+                //    lonelyPts.AddRange(lonelyPtsTmp);
+                //    foreach (var pt in d.points)
+                //    {
+                //        bool usedInEdge = edgesDict[d].Any(e => e.p0.Id == pt.Id || e.p1.Id == pt.Id);
+                //        if (!usedInEdge)
+                //        {
+                //            Debug.LogWarning($"Point {pt.Id} is not used in any edge in district {d.Id}");
+                //        }
+                //    }
+                //    if (lonelyPtsTmp.Any())
+                //    {
+                //        var foundPts = new List<bool>();
+                //        foreach (var lPt in lonelyPtsTmp)
+                //        {
+                //            d.ContainsCheckpoint(lPt);
+                //        }
+                //    }                
+                //}
+
+                //missing edges: 19898a70-ecf9-4cf7-931b-8c28d99d6f09
+                //invalid edges: dc3f8a70-7215-4977-b867-be9d98b213dc
+            }
+            var allDistEdges = new List<LineSegment>();
             //foreach (var d in s.InnerDistricts)
             //{
-            //    var newPts = d.CheckForDistrictEdgePoints(s);
-            //    d.ReorderPointsByAngle();
-            //}
-
-            //foreach (var d in s.InnerDistricts)
-            //{
-            //    var allPoints = edgesDict[d].SelectMany(e => e.EdgePoints).ToList();
-            //    var lonelyPtsTmp = allPoints
-            //        .Where(p => allPoints.Count(p2 => Vector2.Distance(p.pos, p2.pos) < .2f) < 2)
-            //        .Distinct(new PointsComparer())
-            //        .ToList();
-            //    AddDistrictEdges(d, edgesDict[d], s.InnerDistricts.IndexOf(d));
-            //    edgesDict[d].ForEach(e => e.p0.AddNeighbour(e.p1));
-            //    RemoveLoseEdges(d, edgesDict[d]);
-            //    RemoveOutsideEdges(d, edgesDict[d]);
-            //    allPoints = edgesDict[d].SelectMany(e => e.EdgePoints).ToList();
-            //    lonelyPtsTmp = allPoints
-            //        .Where(p => allPoints.Count(p2 => Vector2.Distance(p.pos, p2.pos) < .2f) < 2)
-            //        .Distinct(new PointsComparer())
-            //        .ToList();
-            //    lonelyPts.AddRange(lonelyPtsTmp);
-            //    foreach (var pt in d.points)
+            //    nodeDict.Add(d, new List<PtWSgmnts>());
+            //    foreach (var edge in edgesDict[d])
             //    {
-            //        bool usedInEdge = edgesDict[d].Any(e => e.p0.Id == pt.Id || e.p1.Id == pt.Id);
-            //        if (!usedInEdge)
+            //        allDistEdges.Add(edge);
+            //        if (!allNodes.Contains(edge.p0))
             //        {
-            //            Debug.LogWarning($"Point {pt.Id} is not used in any edge in district {d.Id}");
+            //            allNodes.Add(edge.p0);
+            //        }
+            //        if (!allNodes.Contains(edge.p1))
+            //        {
+            //            allNodes.Add(edge.p1);
+            //        }
+
+            //        if (!nodeDict[d].Contains(edge.p0))
+            //        {
+            //            nodeDict[d].Add(edge.p0);
+            //        }
+            //        if (!nodeDict[d].Contains(edge.p1))
+            //        {
+            //            nodeDict[d].Add(edge.p1);
             //        }
             //    }
-            //    if (lonelyPtsTmp.Any())
-            //    {
-            //        var foundPts = new List<bool>();
-            //        foreach (var lPt in lonelyPtsTmp)
-            //        {
-            //            d.ContainsCheckpoint(lPt);
-            //        }
-            //    }                
             //}
-
-            //missing edges: 19898a70-ecf9-4cf7-931b-8c28d99d6f09
-            //invalid edges: dc3f8a70-7215-4977-b867-be9d98b213dc
-
-            foreach (var d in s.InnerDistricts)
+            foreach (var edge in allEdges)
             {
-                nodeDict.Add(d, new List<PtWSgmnts>());
-                foreach (var edge in edgesDict[d])
+                if (!allNodes.Contains(edge.p0))
                 {
-                    edge.p0.AddNeighbour(edge.p1);
-                    if (!allEdges.Any(e => e.ContainsAllEdgePointsPos(edge.EdgePoints)))
-                        allEdges.Add(edge);
-                    if (!allNodes.Contains(edge.p0))
-                    {
-                        allNodes.Add(edge.p0);
-                    }
-                    if (!allNodes.Contains(edge.p1))
-                    {
-                        allNodes.Add(edge.p1);
-                    }
-
-                    if (!nodeDict[d].Contains(edge.p0))
-                    {
-                        nodeDict[d].Add(edge.p0);
-                    }
-                    if (!nodeDict[d].Contains(edge.p1))
-                    {
-                        nodeDict[d].Add(edge.p1);
-                    }
+                    allNodes.Add(edge.p0);
+                }
+                if (!allNodes.Contains(edge.p1))
+                {
+                    allNodes.Add(edge.p1);
                 }
             }
 
-            //kupa zbêdnych krawêdzi: 2d2f1dbb-4797-4913-b10a-2d2eb95d7f7a
-            //DetectGraphCycles2.AnalyzeEdgeSanity(allEdges);
-            //DetectGraphCycles2.ValidateCycle = true;
-            //rawCycles = DetectGraphCycles.FindMinimalCycles(allEdges);
-            //allCycles = DetectGraphCycles.TrySplitInvalidCycles(allEdges, rawCycles);
-            //Debug.Log($"Liczba cykli: {allCycles.Count}, surowych: {rawCycles.Count}");
+            
 
-            //var missingEdgesStr = DetectGraphCycles2.AnalyzeCycleCoverage(allEdges, allCycles);
-            //InvalidEdges = DetectGraphCycles2.AnalyzeInvalidEdges(allEdges, allCycles);
-            //foreach (var edge in missingEdgesStr)
-            //{
-            //    var ids = edge.Split('_').ToList().ConvertAll(e => Convert.ToInt32(e));
-            //    var node1 = allNodes.First(n => n.Id == ids[0]);
-            //    var neighbour = node1.Neighbours.FirstOrDefault(n => n.Id == ids[1]);
+            var allNodesCount = allNodes.Count;
+            allNodes = allNodes.Distinct(new PointsComparer(true)).ToList();
+            Debug.Log($"All nodes count before: {allNodesCount}, after:{allNodes.Count}");
+            var neighbourCount = allNodes.Select(n => n.Neighbours.Count).ToList();
+            var avgNei = neighbourCount.Average();
+            var min = neighbourCount.Min();
+            var max = neighbourCount.Max();
+            
+            Debug.Log($"Neighbourds data: {avgNei}, {min}, {max}");
+            var nodesWithNoNeightbours = allNodes.Where(n => n.Neighbours.Count <= 1).ToList();
+            Debug.Log($"Lonely nodes: {nodesWithNoNeightbours.Count}");
+            IdentifyCoveringEdges();
+            var lonelyEdges = allEdges.Where(e => e.ContainsAnyEdgePointId(nodesWithNoNeightbours.ToArray())).ToList();
+            //foreach (var lEdge in lonelyEdges)
+            for(int i = 0; i < lonelyEdges.Count; i++)
+            {
+                var lEdge = lonelyEdges[i];
+                Debug.Log(lEdge.p0.Neighbours.Count);
+                Debug.Log(lEdge.p1.Neighbours.Count);
+                //Debug.DrawLine(lEdge.p0.pos, lEdge.p1.pos, Color.red);
+                Debug.Log($"Deleting edge at {i}/{lonelyEdges.Count - 1}");
+                lEdge.p0.AddNeighbours(lEdge.p1);
 
-            //    MissingEdges.Add(new LineSegment(node1, neighbour));
-            //    MissingEdges.Last().CalculatePathLength();
-            //}
+                //allEdges.Remove(lEdge);
+            }                        
 
-            //var shortEdges = allEdges.Where(e => e.CalculatePathLength() < 0.5f).ToList();
-            //if (shortEdges.Any())
-            //{
-            //    allEdges.RemoveList(shortEdges);
-            //    Debug.Log($"Short edges removed: {shortEdges.Count}");
-            //}
 
-            //var nodes = allNodes.Distinct(new PointsComparer()).ToList();
-            //if (nodes.Count < allNodes.Count)
-            //{
-            //    Debug.LogWarning($"Duplicated node positions found: {allNodes.Count - nodes.Count}");
-            //}
+            var strEdge = allEdges.FirstOrDefault(e => e.EdgePoints.Select(e => e.Id).Contains(301) && e.EdgePoints.Select(e => e.Id).Contains(302));
+            var removedEdges = new List<LineSegment>();
+            if (strEdge != null)
+            {                
+                Debug.LogWarning($"GOOOOOT IT:D!!!!: id = {strEdge.Id} p0 neigh: {strEdge.p0.Neighbours.Count}, p1 neigh: {strEdge.p1.Neighbours.Count}, p0.id ={strEdge.p0.Id}, p1.id = {strEdge.p1.Id}");    
+                var shift = new Vector2(.2f,  .2f);
+                //foreach(var neigh in strEdge.p0.Neighbours)
+                //{
+                //    Debug.DrawLine(strEdge.p0.pos + shift, neigh.pos + shift, Color.magenta);
+                //}
 
-            facesExtracted = FaceExtractor3.ExtractMinimalCoveringFacesIterative(allEdges, 55);
-            //facesExtracted = FaceExtractor.ExtractFacesWithoutOuter(allEdges);
-            //var missingEdgesStr = DetectGraphCycles2.AnalyzeCycleCoverage(allEdges, facesExtracted, "FACES");
-            //InvalidEdges = DetectGraphCycles2.AnalyzeInvalidEdges(allEdges, facesExtracted, "FACES");
+                Debug.DrawRay(strEdge.p1.pos, Vector2.up * 3, Color.red);
+                Color[] colors = new Color[] { Color.red, Color.green, Color.gray, Color.yellow, Color.black, Color.magenta };
+                int index = 0;
 
-            //var lenghts = missingEdgesStr.Select(e => MathF.Round(e.Length, 3)).ToList();
-            //if (InvalidEdges.Count > 0)
-            //    Debug.LogWarning($"FACES: Invalid edges counts: {InvalidEdges.Count}");
 
-            //if (lenghts.Any())
-            //    Debug.LogWarning($"FACES: Missing Edges lenghts: {string.Join(' ', lenghts)}");
+                //shift = new Vector2(-.2f, -.2f);
+                var p1Edges = GetExistingEdgesOnly(strEdge.p1, Color.yellow);
+                var ptsNoEdges = IdentifyNeighboursWIthtoutEdges(strEdge.p1, Color.yellow);
+                //Debug.DrawRay(strEdge.p1.pos, Vector2.up * 3, Color.black);
 
-            //var count = allNodes.Select(n => n.Id).Distinct().Count();
-            //if (count != allNodes.Count)
-            //{
-            //    Debug.LogWarning($"FACES: Ids less than allnodes: {allNodes.Count} > {count}");
-            //}
+                foreach (var neigh in ptsNoEdges)
+                {
+                    Debug.DrawLine(strEdge.p1.pos + shift, neigh.pos + shift, colors[index++]);
+                    shift += new Vector2(.1f, .1f);
+                }
+
+                //var p1NeighbourdsWithoutEdge = p1Edges.SelectMany(e => e.EdgePoints).Distinct(new PointsComparer(true)).Where(p => p.Id != strEdge.p1.Id).ToList();
+                //strEdge.p1.Neighbours = strEdge.p1.Neighbours.Except(p1NeighbourdsWithoutEdge).ToList();
+
+                //Debug.Log($"{p1Edges[2].EdgeIds.Join(',')}, {p1Edges[3].EdgeIds.Join(',')}"); 
+                index = 0;
+                foreach (var neigh in p1Edges)
+                {
+                    if (index == 0)
+                    {
+                        Debug.Log($"Point 0 (red) in innercircle for edge id {neigh.Id}: " + s.innerCircleStreet.ContainsPoint(neigh.TheOtherPoint(strEdge.p1)));
+                    }
+                    if (index == 1)
+                    {
+                        //Remove not existing neighbours
+                        var theOtherPt = neigh.TheOtherPoint(strEdge.p1); 
+                        var existingEdges = GetExistingEdgesOnly(theOtherPt, Color.red);
+
+                        var testedEdge = existingEdges[2];
+                        var pointsOnEdge = allNodes.Where(n => n.Id != testedEdge.Id && ParcelGenerator.IsPointOnSegment(n.pos, testedEdge.p0.pos, testedEdge.p1.pos) && !testedEdge.EdgeIds.Contains(n.Id)).ToList();
+                        if(pointsOnEdge.Any())
+                        {                            
+                            Debug.Log($"POints on EDGE {testedEdge.Id}!!!: {pointsOnEdge.Select(p => p.Id).Join(',')}");
+                            //Debug.DrawLine(testedEdge.p0.pos, testedEdge.p1.pos, Color.green);
+                        }
+
+                        foreach(var edge in existingEdges)
+                        {
+                            //Debug.DrawLine(edge.p0.pos, edge.p1.pos, Color.red);
+                        }
+
+                    }
+                    if (index == 2)
+                    {
+                        RemoveDuplicatesOf(neigh, true);
+                    }
+                    var color = colors[index];
+                    index = (index + 1) % colors.Length;
+                    Debug.Log($"Edge {neigh.Id}, color {index}, length: {neigh.CalculateLength()}");
+                    //Debug.DrawLine(strEdge.p1.pos + shift, neigh.TheOtherPoint(strEdge.p1).pos + shift, color);
+                    shift += new Vector2(-.2f, -.2f);
+                }
+                Debug.Log(string.Join(',', p1Edges.Select(e => e.Id)));
+
+                shift = new Vector2(.1f, .1f);
+                //Debug.DrawLine(strEdge.p0.pos, strEdge.p1.pos, Color.cyan);
+                //allEdges.Remove(strEdge);
+                Debug.LogWarning($"EEEEEND:D!!!!: id = {strEdge.Id} p0 neigh: {strEdge.p0.Neighbours.Count}, p1 neigh: {strEdge.p1.Neighbours.Count}, p0.id ={strEdge.p0.Id}, p1.id = {strEdge.p1.Id}");
+            }
+
+            
+            var sh = new Vector2(.3f,  .3f);
+            //Debug.DrawLine(strEdge.p0.pos + sh, strEdge.p1.pos + sh, Color.cyan);
+            foreach (var removedEdge in removedEdges)
+            {
+                //Debug.DrawLine(removedEdge.p0.pos + sh, removedEdge.p1.pos + sh, Color.red);
+            }
+
+            ReportSummary();
+            {
+                //kupa zbêdnych krawêdzi: 2d2f1dbb-4797-4913-b10a-2d2eb95d7f7a
+                DetectGraphCycles2.AnalyzeEdgeSanity(ref allEdges);                
+                //DetectGraphCycles2.ValidateCycle = true;
+                //rawCycles = DetectGraphCycles.FindMinimalCycles(allEdges);
+                //allCycles = DetectGraphCycles.TrySplitInvalidCycles(allEdges, rawCycles);
+                //Debug.Log($"Liczba cykli: {allCycles.Count}, surowych: {rawCycles.Count}");
+                //if (allCycles.Any() || rawCycles.Any())
+                //{
+                //    InvalidEdges = DetectGraphCycles2.AnalyzeInvalidEdges(allEdges, allCycles);
+                //    Debug.LogWarning($"Invalid edges: {InvalidEdges.Count}");
+
+                //    var nodes = allNodes.Distinct(new PointsComparer(true)).ToList();
+                //    var diffs = allNodes.Except(nodes).ToList();
+
+                //    if (nodes.Count < allNodes.Count)
+                //    {
+                //        Debug.LogWarning($"Duplicated node positions found: {diffs.Count}: {string.Join(',', diffs.Select(d => d.Id))}");
+                //    }
+
+                //    var shift = new Vector2(.2f, .2f);
+                //    foreach (var diff in diffs)
+                //    {
+                //        Debug.DrawRay(diff.pos, Vector2.up + shift, Color.magenta);
+                //        shift += new Vector2(.2f, .2f);
+                //    }
+                //}
+            }
+            //facesExtracted = FaceExtractor3.ExtractMinimalCoveringFacesIterative(allEdges, 50);
+            //facesExtracted = FaceExtractor2.ExtractFaces(allEdges);
+            facesExtracted = FaceExtractor.ExtractMinimalCoveringFacesIterative(allEdges, 50);
+            Debug.Log($"Faces extracted: {facesExtracted.Count}");
+            var missingEdgesStr = DetectGraphCycles2.AnalyzeCycleCoverage(allEdges, facesExtracted, "FACES");
+        }
+
+        List<PtWSgmnts> allPtsIdMatters = new();
+        List<PtWSgmnts> allPtsIdNotMatters = new();
+        List<Tuple<LineSegment, LineSegment>> coveringSegments = new();
+        public void IdentifyCoveringEdges()
+        {
+            int zeroLen = 0;
+            int idMatch = 0;
+            int posMatch = 0;
+            int edgesRemoved = 0;
+            do
+            {
+                edgesRemoved = 0;
+                for (int i = 0; i < allEdges.Count; i++)
+                {
+                    for (int j = 0; j < allEdges.Count; j++)
+                    {
+                        if (i != j)
+                        {
+                            var edgeI = allEdges[i];
+                            var edgeJ = allEdges[j];
+                            if (AreSegmentsParallel(edgeI, edgeJ))
+                            {
+                                var e1P0One2 = ParcelGenerator.IsPointOnSegment(edgeI.p0.pos, edgeJ.p0.pos, edgeJ.p1.pos);
+                                var e1P1OnE2 = ParcelGenerator.IsPointOnSegment(edgeI.p1.pos, edgeJ.p0.pos, edgeJ.p1.pos);
+                                var e2P0One1 = ParcelGenerator.IsPointOnSegment(edgeJ.p0.pos, edgeI.p0.pos, edgeI.p1.pos);
+                                var e2P1OnE1 = ParcelGenerator.IsPointOnSegment(edgeJ.p1.pos, edgeI.p1.pos, edgeI.p1.pos);
+
+                                if ((e1P0One2 && e1P1OnE2) || (e2P0One1 && e2P1OnE1))
+                                {
+                                    var ptIdMatch = edgeI.ContainsAnyEdgePointId(edgeJ.EdgePoints);
+                                    var ptPosMatch = edgeI.EdgePoints.Where(ep => (ep.Id != edgeJ.p0.Id && ep.pos.DistanceTo(edgeJ.p0.pos) < EPSILON)
+                                                || (ep.Id != edgeJ.p1.Id && ep.pos.DistanceTo(edgeJ.p1.pos) < EPSILON)).ToList();
+                                   
+                                    if (edgeI.CalculateLength() < EPSILON && edgeJ.CalculateLength() > EPSILON)
+                                    {
+                                        edgesRemoved++;
+                                        allEdges.Remove(edgeI);
+                                        i--;
+                                    }
+                                    else if (edgeJ.CalculateLength() < EPSILON && edgeI.CalculateLength() > EPSILON)
+                                    {
+                                        edgesRemoved++;
+                                        allEdges.Remove(edgeJ);
+                                        j--;
+                                    }
+                                    else
+                                    {
+                                       
+                                        if (ptPosMatch.Any())
+                                        {
+                                            posMatch++;
+                                        }
+
+                                        if (ptIdMatch)
+                                        {
+                                            idMatch++;
+                                        }
+
+                                        coveringSegments.Add(new Tuple<LineSegment, LineSegment>(edgeI, edgeJ));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                var lengths = coveringSegments.Select(c => c.Item1.CalculateLength().ToString() + " " + c.Item2.CalculateLength());
+                Debug.LogWarning($"Covering segments found {coveringSegments.Count}. Lengths = {string.Join('-', lengths)}. idMatch = {idMatch}, posmatch = {posMatch}, zerolen = {zeroLen}, Edges removed: {edgesRemoved}");
+            }
+            while (edgesRemoved > 0);
+        }
+
+        public static bool AreSegmentsParallel(LineSegment l1, LineSegment l2, float tolerance = 1e-6f)
+        {
+            return AreSegmentsParallel(l1.p0.pos, l1.p1.pos, l2.p0.pos, l2.p1.pos, tolerance);
+        }
+
+        public static bool AreSegmentsParallel(Vector2 a1, Vector2 a2, Vector2 b1, Vector2 b2, float tolerance = 1e-6f)
+        {
+            Vector2 dir1 = a2 - a1;
+            Vector2 dir2 = b2 - b1;
+
+            float cross = dir1.x * dir2.y - dir1.y * dir2.x;
+            return Mathf.Abs(cross) < tolerance;
+        }
+
+        void ReportSummary()
+        {
+            var message = $"//////////////////=> Close points found {closePoints.Count}";
+            Debug.Log(message);
         }
 
         List<LineSegment[]> invalidTriangles = new List<LineSegment[]>();
         List<LineSegment[]> height0Triangles = new List<LineSegment[]>();
-        void GetRidOfFlatTriangles(District d, float minTriangleHeight)
+
+        List<Tuple<LineSegment, PtWSgmnts>> closePoints = new List<Tuple<LineSegment, PtWSgmnts>>();
+        void GetRidOfSeparatePointsTooCloseToEdges(List<LineSegment> edges, float minTriangleHeight)
+        {
+            var allPts = edges.SelectMany(e => e.EdgePoints).Distinct(new PointsComparer(true)).ToList();
+            foreach (var pt in allPts)
+            {
+                var edgesByDist = edges.Where(e => !e.ContainsAnyEdgePointId(pt)).OrderBy(e => ParcelGenerator.PerpendicularDistance(e, pt));
+                foreach(var closeEdge in edgesByDist)
+                {
+                    var distToP0 = closeEdge.p0.DistanceTo(pt);
+                    var distToP1 = closeEdge.p1.DistanceTo(pt);                    
+                    var totalDists = distToP0 + distToP1;
+                    var edgeLen = closeEdge.CalculateLength();
+                    var dist = ParcelGenerator.PerpendicularDistance(closeEdge, pt);
+                    if (dist < minTriangleHeight && totalDists < edgeLen && distToP0 < edgeLen && distToP0 < edgeLen)
+                    {
+                        closePoints.Add(new Tuple<LineSegment, PtWSgmnts>(closeEdge, pt));
+                    }
+                }
+            }
+        }
+        
+        void GetRidOfFlatTrianglesNotCool(District d, float minTriangleHeight)
         {
             invalidTriangles.Clear();
             height0Triangles.Clear();
@@ -576,7 +964,7 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
                         var peprInters = ParcelGenerator.GetPerpendicularIntersection(edgeI.p0.pos, edgeI.p1.pos, pt.pos);
                         var height = (peprInters - pt.pos).magnitude;
                         lenList.Add((float)Math.Round(height, 2));
-                        totalLens.Add(edgeI.CalculatePathLength() + edgeJ.CalculatePathLength() + edgeK.CalculatePathLength());
+                        totalLens.Add(edgeI.CalculateLength() + edgeJ.CalculateLength() + edgeK.CalculateLength());
                         if (height < minTriangleHeight)
                         {
                             var possibleToRemove = triangleEdges.Where(e => e.Removable).ToList();
@@ -609,9 +997,10 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
             Debug.LogWarning($"Triangle lens: {string.Join('_', totalLens.OrderBy(l => l))}");
         }
 
-        void AddIntersectionsToStreets()
+        void AddIdentifiedIntersectionsToStreets()
         {
-            s.notJoinedRoads.Select(r => r.CalculatePathLength());
+            int count = 0;
+            s.notJoinedRoads.Select(r => r.CalculateLength());
             foreach (var inters in intersections)
             {
                 foreach (var street in s.notJoinedRoads)
@@ -625,13 +1014,16 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
                             if (isPointOnLine(curr, next, inters))
                             {
                                 street.InsertCheckpoint(inters, i + 1);
-                                Debug.Log("Intersection point added to street!!!!");
+                                //Debug.Log("Intersection point added to street!!!!");
+                                count++;
                                 break;
                             }
                         }
                     }
                 }
             }
+
+            Debug.Log($"Intersections added: {count}");
         }
         int RemoveLoseEdges(District d, List<LineSegment> edges)
         {
@@ -652,23 +1044,29 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
             }
             return loseEdges.Count;
         }
-        int RemoveOutsideEdges(District d, List<LineSegment> edges)
+        
+
+        //int RemoveOutsideEdges(List<PtWSgmnts> limit, List<LineSegment> edges)
+        //{
+        //    var allPts = edges.SelectMany(e => e.EdgePoints).ToList();
+        //    var edgesOutside = edges.Where(e => e.Removable).Where(e => !d.ContainsPoint(e.p0) && !d.ContainsPoint(e.p1)).ToList();
+        //    edges.RemoveList(edgesOutside);
+        //    if (edgesOutside.Any())
+        //    {
+        //        this.LoseEdges.AddRange(edgesOutside);
+        //        Debug.Log($"Removed {edgesOutside.Count} lose edges");
+        //    }            
+        //    return edgesOutside.Count;
+        //}
+        void RemoveEdgesWIthPointsOutside(District d, List<LineSegment> edges)
         {
             var allPts = edges.SelectMany(e => e.EdgePoints).ToList();
-            var edgesOutside = edges.Where(e => e.Removable).Where(e => !d.ContainsPoint(e.p0) && !d.ContainsPoint(e.p1)).ToList();
+            var edgesOutside = edges.Where(e => !d.ContainsPoint(e.p0) || !d.ContainsPoint(e.p1)).ToList();
+            int initCount = edges.Count;
             edges.RemoveList(edgesOutside);
-            if (edgesOutside.Any())
-            {
-                this.LoseEdges.AddRange(edgesOutside);
-                Debug.Log($"Removed {edgesOutside.Count} lose edges");
-            }            
-            return edgesOutside.Count;
-        }
-        void RemoveEdgesWIthOutsidePoints(District d, List<LineSegment> edges)
-        {
-            var allPts = edges.SelectMany(e => e.EdgePoints).ToList();
-            var edgesOutside = edges.Where(e => e.Removable).Where(e => !d.ContainsPoint(e.p0) || !d.ContainsPoint(e.p1)).ToList();
-            edges.RemoveList(edgesOutside);
+            if(edgesOutside.Any())
+                Debug.Log($"Removed edges with points outside: {edgesOutside.Count}");
+
         }
         int RemoveDeadPoints(District d, List<LineSegment> edges)
         {
@@ -690,7 +1088,7 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
             var zeroEdges = new List<LineSegment>();
             for(int i = 0; i < edges.Count; i++)
             {
-                if (edges[i].CalculatePathLength() == 0)
+                if (edges[i].CalculateLength() == 0)
                 {
                     zeroEdges.Add(edges[i]);
                     count++;
@@ -728,7 +1126,7 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
             int count2 = 0;
             for (int i = 0; i < edges.Count; i++)
             {
-                if (edges[i].CalculatePathLength() == 0)
+                if (edges[i].CalculateLength() == 0)
                 {
                     edges.RemoveAt(i--);
                     count2++;
@@ -744,40 +1142,9 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
         int WieldPtsThatAreTooClose(District d, List<LineSegment> edges, Vector2 center, float minDist = 1f)
         {
             int count = 0;
-            
-            foreach (var e in edges)
-            {
-                if(e.CalculatePathLength() < minDist)
-                {
-                    var is0MainRoadOrInnStr = d.bStr.Any(s => s.ContainsCheckpoint(e.p0));
-                    var is1MainRoadOrInnStr = d.bStr.Any(s => s.ContainsCheckpoint(e.p1));
-                    PtWSgmnts wallPt = null, notWallPt = null;
-                    if (is0MainRoadOrInnStr == is1MainRoadOrInnStr)
-                    {
-                        var newPos = Vector2.Lerp(e.p0.pos, e.p1.pos, .5f);
-                        e.p0.pos = newPos;
-                        e.p1.pos = newPos;
-                        wallPt = e.p0;
-                        notWallPt = e.p1;
-                    }
-                    else if (is0MainRoadOrInnStr && !is1MainRoadOrInnStr)
-                    {
-                        e.p1.pos = e.p0.pos;
-                        wallPt = e.p0;
-                        notWallPt = e.p1;
-                    }
-                    else if (is1MainRoadOrInnStr && !is0MainRoadOrInnStr)
-                    {
-                        e.p0.pos = e.p1.pos;
-                        wallPt = e.p1;
-                        notWallPt = e.p0;
-                    }
-                    wallPt.AddNeighbour(notWallPt.Neighbours.ToArray());
-                }
-            }
 
             var removedMainRoadPts = 0;
-            foreach(var str in d.bStr)
+            foreach (var str in d.bStr)
             {
                 for (int i = 0; i < str.points.Count - 1; i++)
                 {
@@ -794,9 +1161,9 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
                     }
                 }
             }
-            Debug.Log($"Removed main road points: {removedMainRoadPts}");
+            //Debug.Log($"Removed main road points: {removedMainRoadPts}");
             //node level 2 with 180 deg angle
-            //street nodes with dist < 1
+            //street nodes with dist< 1
 
             if (count > 0)
             {
@@ -812,10 +1179,14 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
                 edges.Add(new LineSegment(d.points[i], d.points[i + 1]));
                 edges.Last().Removable = false;
             }
-            if (d.points.Last().Id != d.points[0].Id)
+            if (d.points[^1].Id != d.points[0].Id)
             {
-                edges.Add(new LineSegment(d.points.Last(), d.points[0]));
-                edges.Last().Removable = false;
+                var edge = new LineSegment(d.points[^1], d.points[0]);
+                if(edge.CalculateLength() > 0)
+                {
+                    edges.Add(edge);
+                    edges.Last().Removable = false;
+                }
             }
 
             var edgePts = new HashSet<PtWSgmnts>(edges.SelectMany(e => new[] { e.p0, e.p1 }));
@@ -824,158 +1195,6 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
             {
                 Debug.LogWarning($"Missing edge for points: {string.Join(", ", missingPts.Select(p => p.Id))}");
             }
-        }
-
-        int IdentifyIntersections(District d, List<LineSegment> edges, Vector2 center)
-        {
-            int count = 0;
-            d.ReorderPointsByAngle();            
-            for (int j = 0; j < edges.Count; j++)
-            {
-                var edge = edges[j];
-                for (int i = 0; i < d.points.Count; i++)
-                {
-                    var pt = d.points[i];
-                    var nextPt = d.points.Neighbour(i, 1);
-                    d.intersections = IdentifyIntersection(pt, nextPt, edge, d, i, center, false);
-                    if (d.intersections.Count == 1)
-                    {
-                        i++;
-                        count++;
-                    }
-                }
-            }
-            if (count > 0)
-            {
-                Debug.Log($"Identified intersections and shortened {count} edges out of {edges.Count} for district {d.Id}");
-            }
-            return count;
-        }
-        List<PtWSgmnts> IdentifyIntersection(PtWSgmnts pt, PtWSgmnts nextPt, LineSegment edge, District d, int i, Vector2 center, bool MakeMovable = false)
-        {
-            List<PtWSgmnts> localInters = new();
-            var inters = VectorIntersect.GetIntersectionPoint(pt, nextPt, edge);
-            if (inters.HasValue)
-            {
-                var intersPt = new PtWSgmnts(inters.Value, MakeMovable);
-                                    
-                Street street = null;
-                if (s.innerCircleStreet.ContainsCheckpoints(pt, nextPt))
-                {
-                    street = s.innerCircleStreet;
-                }
-                else
-                {
-                    street = d.bStr.FirstOrDefault(s => s.ContainsCheckpoints(pt, nextPt));                    
-                }
-
-                if (street != null)
-                {
-                    var orderedCircles = street.points.OrderBy(p => p.DistanceTo(intersPt)).ToList();
-                    var orderedCircle = orderedCircles.First();
-                    var dist = orderedCircle.DistanceTo(intersPt);
-                    
-                    if (dist < .1f)
-                    {
-                        //is it point already intersected?
-                    }
-                    else if (dist < 2f)
-                    {//point too close to existing one
-                        intersPt = orderedCircle;
-                    }
-                    else if (dist > 2f)
-                    {
-                        var index1 = street.points.IndexOf(pt);
-                        var index2 = street.points.IndexOf(nextPt);
-                        if (index1 < 0 || index2 < 0)
-                        {
-                            Debug.LogError($"Street {street.Id} does not contain both {pt.Id} and {nextPt.Id}");
-                            return localInters;
-                        }
-                       
-
-                        int insertIndex = d.points.IndexOf(pt) + 1;
-                        if (insertIndex >= d.points.Count)
-                            insertIndex = 0; // wrap
-
-
-                        d.InsertCheckpoint(intersPt, insertIndex);
-                        localInters.Add(intersPt);
-                        if (InsertIntersections)
-                            street.InsertCheckpoint(intersPt, Math.Max(index1, index2));
-                    }
-                }
-                else
-                {
-                    int insertIndex = d.points.IndexOf(pt) + 1;
-                    if (insertIndex >= d.points.Count)
-                        insertIndex = 0; // wrap
-                    d.InsertCheckpoint(intersPt, insertIndex);
-                    localInters.Add(intersPt);
-
-                    var streets = d.bStr.Where(s => s.ContainsCheckpoint(nextPt) || s.ContainsCheckpoint(nextPt)).ToList();
-                    foreach (var str in streets)
-                    {
-                        var indexOfPt = str.points.IndexOf(pt);
-                        var indexOfNextPt = str.points.IndexOf(nextPt);
-                        insertIndex = (indexOfPt > -1? indexOfPt: indexOfNextPt);
-                        if (InsertIntersections)
-                            str.InsertCheckpoint(intersPt, insertIndex);                        
-                    }
-                }
-
-                //var inserts = 0;
-                //var onLine = 0;
-                //var roads = s.notJoinedRoads.Where(r => r.Id != s.innerCircleStreet.Id).ToList();
-                //foreach (var intersVr in localInters)
-                //{                    
-                //    var roadsAlreadyHavingPt = roads.Count(r => r.ContainsCheckpoint(intersVr));
-                //    if (roadsAlreadyHavingPt == 0)
-                //    {
-                //        foreach (var road in roads)
-                //        {
-                //            for (int j = 0; j < road.points.Count - 1; j++)
-                //            {
-                //                var pj = road.points[j];
-                //                var pNext = road.points[j + 1];
-                //                var isOnLine = ParcelGenerator.IsPointOnSegment(pj.pos, pNext.pos, intersVr.pos);
-                //                if (isOnLine)
-                //                {
-                //                    ptsInserts.Add(intersVr);
-                //                    road.points.Insert(j + 1, intersVr);
-                //                    j++;
-                //                    inserts++;
-                //                    goto nextIntersVr;
-                //                }
-                //            }
-
-                //        }                        
-                //    }
-                //    nextIntersVr: { }
-                //}
-
-                //Debug.Log($"INSERTS: {inserts}, onLine: {onLine}");
-
-                //d.ReorderPointsByAngle();
-                //for (int z = 0; z < d.points.Count; z++)
-                //{
-                //    var a = d.points[z];
-                //    var b = d.points[(z + 1) % d.points.Count];
-                //    if (a == null || b == null) Debug.LogError("Null in district points");
-
-                //    if (a == b)
-                //    {
-                //        Debug.LogError($"Duplicate point {a.Id} in district {d.Id}");
-                //    }
-                //}
-
-                var oldSegment = edge.ReplaceOutsideEdgePtReturnOld(center, intersPt, d);
-                oldSegment.ReplaceCloserEdgePt(center, intersPt);
-                shortenedEdges.Add(edge);
-                overlappingEdges.Add(oldSegment);
-                edge.Removable = true;
-            }
-            return localInters;
         }
 
         List<PtWSgmnts> ptsInserts = new();
@@ -993,7 +1212,6 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
         }
 
         List<Voronoi> districtDiagrams = new();
-        
         List<LineSegment> InvalidEdges = new();
         List<LineSegment> MissingEdges = new();
         List<PtWSgmnts> intersections = new();
@@ -1045,6 +1263,16 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
             Gizmos.DrawSphere(center, 0.03f);
         }
 
+        int currClosePt = 0;
+        public void NextCloseTriangle()
+        {
+            currClosePt = (currClosePt + 1) % closePoints.Count;
+        }
+
+        public void PrevCloseTriangle()
+        {
+            currClosePt = (currClosePt - 1 + closePoints.Count) % closePoints.Count;
+        }
         public void OnDrawGizmos()
         {
             //Gizmos.color = Color.green;
@@ -1096,7 +1324,6 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
                 DrawFace(allCycles[i], c, shift);
             }
 
-
             Gizmos.color = Color.black;
             shift = new Vector2(50, 100);
             GizmoDrawer.DrawSegments(MissingEdges, shift, .2f);
@@ -1135,9 +1362,25 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
                     //InvalidPoints
                 }                
                 Gizmos.color = Color.white;
-                GizmoDrawer.DrawSegments(distVEdges, null,   .15f);
+                GizmoDrawer.DrawSegments(distVEdges, null,  .15f);
+
                 Gizmos.color = Color.blue;
-                GizmoDrawer.DrawSegments(allEdges, null, .15f);
+                //GizmoDrawer.DrawSegments(allEdges, null, .15f);
+                shift = Vector2.zero;
+                foreach (var edge in allEdges)
+                {
+                    if(edge.Draw)
+                    {
+                        Gizmos.color = Color.blue;
+                    }                        
+                    else
+                    {
+                        Gizmos.color = Color.red;
+                    }
+                    GizmoDrawer.DrawSegment(edge, shift);
+                    GizmoDrawer.DrawSpheres(edge.EdgePoints.ToList(), shift, .15f);
+                    //shift += new Vector2(0.01f, 0.01f);
+                }
 
                 //Gizmos.color = Color.red;
                 //GizmoDrawer.DrawSpheres(intersections, 0.15f);
@@ -1154,7 +1397,52 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
                 {
                     Gizmos.DrawSphere(point.pos, .3f);
                 }
+
+                
+                shift = new Vector2(-.1f, .1f);
+                foreach(var pair in coveringSegments)
+                {
+                    Gizmos.color = Color.magenta;
+                    Gizmos.DrawLine(pair.Item2.p0.pos + shift, pair.Item2.p1.pos + shift);
+
+                    Gizmos.color = Color.cyan;
+                    Gizmos.DrawLine(pair.Item1.p0.pos - shift, pair.Item1.p1.pos + shift);
+                    if(pair.Item1.Length < 0.001f)
+                    {
+                        Debug.DrawRay(pair.Item1.p0.pos, Vector2.up * 4);
+                    }
+
+                    if (pair.Item2.Length < 0.001f)
+                    {
+                        Debug.DrawRay(pair.Item2.p0.pos, Vector2.up * 4);
+                    }
+                }
+
+                Color[] colors1 = new Color[] { Color.red, Color.yellow, Color.green};
+                float[] sizes = new float[] { .1f, .05f, .025f };
+                foreach (var pt in allPtsIdMatters)
+                {
+                    break;
+                    var indx = Math.Min(pt.Neighbours.Count, 2);
+                    Gizmos.color = colors1[indx];
+                    if(indx < 2)
+                        Gizmos.DrawSphere(pt.pos, sizes[indx]);
+                }
             }
+
+            Gizmos.color = Color.black;
+
+            //foreach(var pair in closePoints)
+            {
+                //GizmoDrawer.DrawSegment(pair.Item1.p0, pair.Item1.p1);
+                //Gizmos.DrawSphere(pair.Item2.pos, .3f);
+                if(closePoints.Any())
+                {
+                    GizmoDrawer.DrawSegment(closePoints[currClosePt].Item1.p0, closePoints[currClosePt].Item1.p1);
+                    Gizmos.DrawSphere(closePoints[currClosePt].Item2.pos, .4f);
+                }
+            }
+
 
             if (DrawTriangles)
             {
@@ -1183,20 +1471,21 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
                     Gizmos.DrawLine(new Vector2(rect.x, rect.yMax) + shift, new Vector2(rect.xMax, rect.yMax) + shift);
                     Gizmos.DrawLine(new Vector2(rect.xMax, rect.yMax) + shift, new Vector2(rect.xMax, rect.y) + shift);
                     Gizmos.DrawLine(new Vector2(rect.xMax, rect.y) + shift, new Vector2(rect.x, rect.y) + shift);
-                    shift.x -= .1f;
-                    shift.y += .1f;
+                    //shift.x -= .1f;
+                    //shift.y += .1f;
                 }
             }
 
             if(DrawMainRoads)
             {
                 shift = new Vector2(.2f,  .2f);
+                shift = Vector2.zero;
                 index = 0;
                 foreach (var road in s.mainRoads)
                 {
                     Gizmos.color = colors.ToList().Neighbour(index++, 0);
                     GizmoDrawer.DrawVectorList(road.points, shift, false,  .25f);
-                    shift += new Vector2(.1f,  .1f);
+                    //shift += new Vector2(.1f,  .1f);
                 }                
                 Gizmos.color = colors.ToList().Neighbour(index++, 0);
                 GizmoDrawer.DrawVectorList(s.innerCircleStreet.points, shift, true, .1f);
@@ -1209,25 +1498,20 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
                 Gizmos.color = Color.white;
                 foreach (var d in s.InnerDistricts)
                 {
-                    //shift = d.points[0].pos - d.FindCenter();
                     GizmoDrawer.DrawVectorList(d.points, shift, true,  .2f);
                     if (edgesDict.ContainsKey(d))
                         GizmoDrawer.DrawSegments(edgesDict[d], shift,   .15f);
                 }
                 
                 Gizmos.color = Color.green;
-                shift = new Vector2(.2f, .2f);
-                //foreach (var pt in ptsOnLine)
-                //{
-                //    Gizmos.DrawSphere(pt.pos + shift, .2f);
-                //}
-
+                shift = new Vector2(.2f,  .2f);
+               
                 index = 0;
                 Gizmos.color = Color.white;
                 foreach (var d in s.InnerDistricts)
                 {
                     shift += new Vector2(35, 0.1f);
-                    GizmoDrawer.DrawVectorList(d.points, shift, true, .2f);
+                    GizmoDrawer.DrawVectorList(d.points, shift, true,  .2f);
                     if (edgesDict.ContainsKey(d))
                         GizmoDrawer.DrawSegments(edgesDict[d], shift, .15f);
                     if(index++ == 1)

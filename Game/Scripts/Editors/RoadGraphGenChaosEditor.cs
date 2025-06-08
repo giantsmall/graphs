@@ -5,14 +5,14 @@ using Assets.Game.Scripts.Gen.GraphGenerator;
 #if UNITY_EDITOR
 namespace Assets.Game.Scripts.Editors
 {
-    [CustomEditor(typeof(RoadGraphGenChaos))]
+    [CustomEditor(typeof(RoadGraphGenChaosNew))]
     public class RoadGraphGenChaosEditor : Editor
     {
         static bool changed = false;
         public override void OnInspectorGUI()
         {
             changed = false;
-            RoadGraphGenChaos gg = (RoadGraphGenChaos)target;
+            var gg = (RoadGraphGenChaosNew)target;
 
             GUILayout.BeginHorizontal();
             gg.DrawEdges = HandleToggle(nameof(gg.DrawEdges), gg.DrawEdges);                        
@@ -30,14 +30,15 @@ namespace Assets.Game.Scripts.Editors
             gg.InsertIntersections = HandleToggle(nameof(gg.InsertIntersections), gg.InsertIntersections);
 
             gg.MinEdgeLength = EditorGUILayout.FloatField(nameof(gg.MinEdgeLength), gg.MinEdgeLength);
-            gg.MinBlockPtsRad = EditorGUILayout.FloatField(nameof(gg.MinBlockPtsRad), gg.MinBlockPtsRad);
+            gg.OuterVoronoiSize = EditorGUILayout.FloatField(nameof(gg.OuterVoronoiSize), gg.OuterVoronoiSize);
+            gg.InnerVoronoiSize = EditorGUILayout.FloatField(nameof(gg.InnerVoronoiSize), gg.InnerVoronoiSize);
             gg.minPtsDistToNoTWield = EditorGUILayout.FloatField(nameof(gg.minPtsDistToNoTWield), gg.minPtsDistToNoTWield);
 
             GUILayout.BeginHorizontal();
-            RoadGraphGenChaos.FixedRandom = EditorGUILayout.Toggle(nameof(RoadGraphGenChaos.FixedRandom), RoadGraphGenChaos.FixedRandom);
-            RoadGraphGenChaos.Randomize = EditorGUILayout.Toggle(nameof(RoadGraphGenChaos.Randomize), RoadGraphGenChaos.Randomize);
+            RoadGraphGenChaosNew.FixedRandom = EditorGUILayout.Toggle(nameof(RoadGraphGenChaosNew.FixedRandom), RoadGraphGenChaosNew.FixedRandom);
+            RoadGraphGenChaosNew.Randomize = EditorGUILayout.Toggle(nameof(RoadGraphGenChaosNew.Randomize), RoadGraphGenChaosNew.Randomize);
             GUILayout.EndHorizontal();
-            RoadGraphGenChaos.Seed = EditorGUILayout.TextField(nameof(RoadGraphGenChaos.Seed), RoadGraphGenChaos.Seed);
+            RoadGraphGenChaosNew.Seed = EditorGUILayout.TextField(nameof(RoadGraphGenChaosNew.Seed), RoadGraphGenChaosNew.Seed);
 
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("Clear seeds")) { RoadGraphGenChaos.ClearSeeds(); }

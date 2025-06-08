@@ -12,8 +12,21 @@ namespace Assets.Game.Scripts.Gen.Models
 {
     public class Polygon
     {
+        internal Rect GetRectangleCircumscribedInPolygon(float offset = 0f)
+        {
+            var pts = this.points.OrderBy(p => p.pos.x).ToList();
+            var minX = pts[0].pos.x;
+            var maxX = pts.Last().pos.x;
+
+            pts = this.points.OrderBy(p => p.pos.y).ToList();
+            var minY = pts[0].pos.y;
+            var maxY = pts.Last().pos.y;
+            var xSize = maxX - minX;
+            var ySize = maxY - minY;
+            return new Rect(new Vector2(minX - offset * xSize, minY - offset * ySize), new Vector2(xSize * (1 + 2 * offset), ySize * (1 + 2 * offset)));
+        }
         public float Length { get; private set; }
-        public List<PtWSgmnts> points { get; set; } = new List<PtWSgmnts>();
+        public List<PtWSgmnts> points { get; set; } = new ();
 
         public Polygon()
         {
@@ -341,7 +354,7 @@ namespace Assets.Game.Scripts.Gen.Models
 
         public void SplitAndDistortOnWorldMap(System.Random rnd, float maxLength)
         {
-            var len = this.CalculatePathLength();
+            var len = this.CalculateLength();
             if (len >= maxLength)
             {
                 var distortionFactor = .25f;
@@ -361,13 +374,13 @@ namespace Assets.Game.Scripts.Gen.Models
                     distortionFactor *= VoronoiDemo.DistortionDecay / 2f;
                 }
                 while (subdivided);
-                this.CalculatePathLength();
+                this.CalculateLength();
             }
         }
 
         public void Split(System.Random rnd, float maxLength)
         {
-            this.CalculatePathLength();
+            this.CalculateLength();
             var len = this.Length;
             if (len >= maxLength)
             {
@@ -387,7 +400,7 @@ namespace Assets.Game.Scripts.Gen.Models
 
                 }
                 while (subdivided);
-                this.CalculatePathLength();
+                this.CalculateLength();
             }
         }
         public void Distort(System.Random rnd, float maxLength)
@@ -428,7 +441,7 @@ namespace Assets.Game.Scripts.Gen.Models
 
         
 
-        public float CalculatePathLength()
+        public float CalculateLength()
         {
             var sum = 0f;
             for (int i = 0; i < points.Count - 1; i++)
@@ -448,12 +461,12 @@ namespace Assets.Game.Scripts.Gen.Models
         internal void AddCheckPoints(params PtWSgmnts[] points)
         {
             this.points.AddRange(points);
-            this.CalculatePathLength();
+            this.CalculateLength();
         }
         internal void AddCheckPoints(params Vector2[] points)
         {
             this.points.AddRange(points.Select(p => new PtWSgmnts(p)));
-            this.CalculatePathLength();
+            this.CalculateLength();
         }
 
 

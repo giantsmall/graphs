@@ -236,7 +236,7 @@ namespace Assets.Game.Scripts.Gen
 
         private static string GetCycleKey(List<PtWSgmnts> cycle)
         {
-            cycle = cycle.Distinct(new PointsComparer()).ToList();
+            cycle = cycle.Distinct(new PointsComparer(false)).ToList();
             int minIndex = 0;
             for (int i = 1; i < cycle.Count; i++)
             {

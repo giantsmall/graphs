@@ -66,13 +66,13 @@ namespace Assets.Game.Scripts.Gen.Models
         public Wall Citadel { get; set; } = new Wall();
         
         public Street innerCircleStreet = new();
-        public Street InnerCircle => wall.points.Any() ? wall.innerWallStreet : innerCircleStreet;
         //buildings
         public List<BuildingModel> buildings { get; protected set; } = new();
         //greens
         public List<DelaunayPolygon> greens { get; protected set; } = new();
         public List<River> rivers { get; protected set; } = new();
-        public List<Vector2> OuterCircle { get; internal set; } = new();
+        public List<PtWSgmnts> OuterCircle { get; internal set; } = new();
+        public List<PtWSgmnts> InnerCircle { get; internal set; } = new();
         public List<District> InnerDistricts { get; internal set; } = new();
         public List<District> OuterDistricts { get; internal set; } = new();
         public List<Block> Blocks { get; internal set; } = new();

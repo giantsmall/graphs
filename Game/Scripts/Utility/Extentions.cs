@@ -198,7 +198,22 @@ namespace Assets.Game.Scripts.Utility
             {
                 t.gameObject.SetActive(go.activeSelf);
             }
-        }        
+        }
+
+        public static List<T> Except<T>(this List<T> list, params T[] items)
+        {
+            return list.Except(items.ToList()).ToList();
+        }
+
+        public static string Join<T>(this IEnumerable<T> str, char separator)
+        {
+            var singleStr = "";
+            foreach (var s in str)
+            {
+                singleStr += s.ToString() + " ";
+            }
+            return singleStr.Trim().Replace(' ', separator);
+        }
 
         public static string Join(this IEnumerable<string> str, char separator)
         {
@@ -215,6 +230,17 @@ namespace Assets.Game.Scripts.Utility
             var result = points.All(p => l.Contains(p));
             return result;
         }
+
+        public static bool ContainsAny<T>(this List<T> l, params T[] containedItems)
+        {
+            foreach (var item in containedItems)
+            {
+                if (l.Contains(item))
+                    return true;
+            }
+            return false;
+        }
+
 
         public static bool ContainsList<T>(this List<T> l, IEnumerable<T> containedList)
         {

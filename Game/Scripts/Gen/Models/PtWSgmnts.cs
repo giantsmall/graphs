@@ -91,14 +91,20 @@ namespace Assets.Game.Scripts.Gen.Models
             return this.neighbourCities.Any(n => PointsComparer.StaticEq(p, n));
         }
 
-        public void AddNeighbour(params PtWSgmnts[] points)
+        public void AddNeighbours(List<PtWSgmnts> points)
+        {
+            this.AddNeighbours(points.ToArray());
+        }
+
+
+        public void AddNeighbours(params PtWSgmnts[] points)
         {
             foreach (var point in points)
             {
-                if (!Neighbours.Contains(point) && point != this)
+                if (!Neighbours.Select(n => n.Id).Contains(point.Id) && point != this)
                 {
-                    Neighbours.Add(point);
-                    point.AddNeighbour(this);
+                    Neighbours.Add(point);                    
+                    point.AddNeighbours(this);
                 }
             }
         }
@@ -236,12 +242,8 @@ namespace Assets.Game.Scripts.Gen.Models
         {
             var sameCoord = SameCoords(p1, p2);
             
-            var sameId = DifferentId(p1, p2);
-            var result = boolIdMatters ? (sameCoord && sameId) : (sameCoord || sameId);
-            if (result)
-            {
-                //Debug.LogWarning("Same pos with different id");
-            }
+            var sameId = SameId(p1, p2);
+            var result = boolIdMatters ? sameId : sameCoord;
             return result;
         }
 

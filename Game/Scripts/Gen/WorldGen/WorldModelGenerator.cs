@@ -34,7 +34,7 @@ namespace Assets.Game.Scripts.Gen.WorldGen
             var m_delaunayTriangulation = v.DelaunayTriangulation();
             var m_spanningTree = v.SpanningTree();
             var points = m_spanningTree.SelectMany(s => s.EdgePoints)
-                                    .Distinct(new PointsComparer())
+                                    .Distinct(new PointsComparer(false))
                                     .ToList();
 
             bool addShortestRelationToSegments = true;

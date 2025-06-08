@@ -41,7 +41,7 @@ namespace Assets.Game.Scripts.Gen.Models
 
             var center = this.FindCenter();
             this.points = this.points.OrderBy(p => Vector2.Angle(p.pos - center, center + Vector2.one - center)).ToList();
-            this.points = this.points.Distinct(new PointsComparer()).ToList();
+            this.points = this.points.Distinct(new PointsComparer(false)).ToList();
         }
     }
 }

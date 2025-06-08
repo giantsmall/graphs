@@ -80,6 +80,7 @@ namespace Assets.Game.Scripts.Gen
             //rnd = new System.Random();
             rnd = new System.Random();
             parcels = MakeLotsBasedOnAngle(rnd, cycle, 4, 5, minWidth, 5);
+            Debug.Log("Generated");
 
         }
 
@@ -334,6 +335,17 @@ namespace Assets.Game.Scripts.Gen
             //return edgeLots;
         }
 
+        public static float PerpendicularDistance(LineSegment line, PtWSgmnts point)
+        {
+            var inters = GetPerpendicularIntersection(line.p0.pos, line.p1.pos, point.pos);
+            return inters.DistanceTo(point.pos);
+        }
+
+        public static float PerpendicularDistance(Vector2 start, Vector2 end, Vector2 point)
+        {
+            var inters = GetPerpendicularIntersection(start, end, point);
+            return inters.DistanceTo(point);
+        }
 
         public static Vector2 GetPerpendicularIntersection(Vector2 start, Vector2 end, Vector2 point)
         {

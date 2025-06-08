@@ -46,7 +46,7 @@ namespace Delaunay
 		public Site Next ()
 		{
 			if (_sorted == false) {
-				UnityEngine.Debug.LogError ("SiteList::next():  sites have not been sorted");
+				UnityEngine.Debug.LogError("SiteList::next():  sites have not been sorted");
 			}
 			if (_currentIndex < _sites.Count) {
 				return _sites [_currentIndex++];

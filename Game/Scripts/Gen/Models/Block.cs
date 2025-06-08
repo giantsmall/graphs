@@ -72,7 +72,7 @@ namespace Assets.Game.Scripts.Gen.Models
                     }
                 }
             }
-            mutualPoints = mutualPoints.Distinct(new PointsComparer()).ToList();
+            mutualPoints = mutualPoints.Distinct(new PointsComparer(false)).ToList();
             return mutualPoints;
         }
 
@@ -300,7 +300,7 @@ namespace Assets.Game.Scripts.Gen.Models
             var streetPoints = new List<PtWSgmnts>[streets.Count];
             for (int i = 0; i < streets.Count; i++)
             {
-                streetPoints[i] = streets[i].points.Where(p => this.points.Contains(p)).Distinct(new PointsComparer()).ToList();
+                streetPoints[i] = streets[i].points.Where(p => this.points.Contains(p)).Distinct(new PointsComparer(false)).ToList();
             }
 
             var lots = new List<Lot>();
@@ -383,7 +383,7 @@ namespace Assets.Game.Scripts.Gen.Models
                 street.AddCheckPoints(centerP);
             }
             street.AddCheckPoints(closestOpp);
-            street.CalculatePathLength();
+            street.CalculateLength();
             street.Split(RoadGraphGenChaos.GetRandom(), 1f);
             blockPoints1.AddRange(street.points.Reversed());
             blockPoints2.AddRange(street.points.Reversed());

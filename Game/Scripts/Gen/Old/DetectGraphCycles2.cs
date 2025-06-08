@@ -1,4 +1,5 @@
 ﻿using Assets.Game.Scripts.Gen.Models;
+using Assets.Game.Scripts.Utility;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -85,23 +86,33 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
             return false;
         }
 
-        public static void AnalyzeEdgeSanity(List<LineSegment> edges)
+        public static void AnalyzeEdgeSanity(ref List<LineSegment> edges)
         {
             var edgeSet = new HashSet<string>();
             var seenPairs = new HashSet<(int, int)>();
             var pointDuplicates = new Dictionary<int, List<Vector2>>();
 
-            foreach (var edge in edges)
+            //foreach (var edge in edges)
+            for (int i = 0; i < edges.Count; i++)            
             {
+                var edge = edges[i];
                 if (edge.p0.Id == edge.p1.Id)
                 {
-                    Debug.LogError($"❌ Self-loop: punkt {edge.p0.Id} łączy się sam ze sobą.");
+                    Debug.LogWarning($"❌ Self-loop: punkt {edge.p0.Id} łączy się sam ze sobą. Len = {edge.CalculateLength()}");
                     Debug.DrawRay(edge.p0.pos, Vector2.up * 4f, Color.black);
                 }
 
                 var key = UndirectedKey(edge.p0.Id, edge.p1.Id);
                 if (!edgeSet.Add(key))
-                    Debug.LogWarning($"⚠️ Duplikat krawędzi: {edge.p0.Id} <-> {edge.p1.Id}");
+                {
+                    Debug.LogWarning($"⚠️ Usunięto duplikat krawędzi o id = {edge.Id}: {edge.p0.Id} <-> {edge.p1.Id}. Len = {edge.CalculateLength()}");
+                    //Debug.DrawRay(edge.p0.pos, Vector2.up, Color.cyan);
+                    //Debug.DrawLine(edge.p0.pos, edge.p1.pos, Color.magenta);
+                    //Debug.DrawRay(edge.p1.pos, Vector2.up, Color.cyan);
+                    edges = edges.Where(e => e.Id != edge.Id).ToList();
+                    i--;
+                }
+                    
 
                 // Sprawdź, czy istnieją różne pozycje dla tego samego ID
                 void TrackPt(PtWSgmnts pt)
@@ -235,7 +246,10 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
             Debug.Log($"{commentPRefix}: Brakujące krawędzie: {missingEdges.Count}");
 
             foreach (var e in missingEdges)
+            {
                 Debug.LogWarning($"{commentPRefix}: Krawędź niepokryta przez żaden cykl: {e}");
+            }
+                
             return missingEdges;
         }
 

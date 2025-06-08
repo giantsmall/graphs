@@ -307,7 +307,6 @@ public class VoronoiDemo : MonoBehaviour
                 st.SplitAndDistortOnWorldMap(rnd, 0.2f);
             }
 
-            
             foreach (var path in vSpanningTree)
             {
                 (var cityMajorPath, var intersPath, var villageSubsegment) = city.GetSegmentsIntersecting(path);

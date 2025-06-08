@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Delaunay.Geo;
 using Delaunay.LR;
+using Assets.Game.Scripts.Utility;
 
 namespace Delaunay
 {
@@ -224,10 +225,10 @@ namespace Delaunay
 			Side orientation = _edgeOrientations [i];
 
 			if (edge.clippedEnds [orientation] == null) {
-				Debug.LogError ("XXX: Null detected when there should be a Vector2!");
+				Debug.LogError("XXX: Null detected when there should be a Vector2!");
 			}
 			if (edge.clippedEnds [SideHelper.Other (orientation)] == null) {
-				Debug.LogError ("XXX: Null detected when there should be a Vector2!");
+                Debug.LogError("XXX: Null detected when there should be a Vector2!");
 			}
 			points.Add ((Vector2)edge.clippedEnds [orientation]);
 			points.Add ((Vector2)edge.clippedEnds [SideHelper.Other (orientation)]);
