@@ -83,9 +83,6 @@ public class VectorIntersect : MonoBehaviour
 
     public static Vector2? GetIntersectionPoint(Vector2 p1, Vector2 p2, Vector2 p3, Vector2 p4)
     {
-        //ParcelGenerator.DrawPolygonRays(new List<Vector2>() { p1, p2}, Color.red);
-        //ParcelGenerator.DrawPolygonRays(new List<Vector2>() { p3, p4 }, Color.red);
-
         float d1 = Vector3.Cross(p1 - p3, p4 - p3).z;
         float d2 = Vector3.Cross(p2 - p3, p4 - p3).z;
         if (d1 - d2 == 0) return null; // P1P2 and P3P4 is parallel in this case

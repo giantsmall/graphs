@@ -114,7 +114,6 @@ public class VoronoiDemo : MonoBehaviour
             //line.Split(rnd, maxRoadSegmentLength);
             //line.Distort(rnd, maxRoadSegmentLength);
         });
-        int a = 5;
         spanningTree.ForEach((LineSegment line) =>
         {
             if(ExperimentalDistort)

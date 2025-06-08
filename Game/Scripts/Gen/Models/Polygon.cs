@@ -27,8 +27,11 @@ namespace Assets.Game.Scripts.Gen.Models
 
         public Polygon(params List<PtWSgmnts>[] pointArrays)
         {
-            this.points = pointArrays.SelectMany(p => p).Distinct(new PointsComparer()).ToList();
+            var many = pointArrays.SelectMany(p => p).ToList();
+            this.points = many.Distinct(new PointsComparer(true)).ToList();
         }
+
+
 
         public Polygon(params PtWSgmnts[] points)
         {
@@ -38,6 +41,12 @@ namespace Assets.Game.Scripts.Gen.Models
         public Polygon(params Vector2[] vertices)
         {
             this.points = vertices.Select(v => new PtWSgmnts(v)).ToList();
+        }
+
+
+        public void ReorderPointsByAngleCCW()
+        {
+            this.points.Select(p => p.pos).ToList().ReorderPointsByAngleCCW();
         }
 
         public bool ContainsCheckpoint(PtWSgmnts point)
@@ -131,6 +140,12 @@ namespace Assets.Game.Scripts.Gen.Models
             while ((!middleInside && nextInside) == inside);
             return points.Take(middle).ToList();
         }
+
+        public List<Vector2> GetVectors()
+        {
+            return points.Select(p => p.pos).ToList();
+        }
+
 
         public static LineSegment GetParallelLine(LineSegment s, float distance)
         {

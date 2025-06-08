@@ -94,7 +94,10 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
             foreach (var edge in edges)
             {
                 if (edge.p0.Id == edge.p1.Id)
+                {
                     Debug.LogError($"❌ Self-loop: punkt {edge.p0.Id} łączy się sam ze sobą.");
+                    Debug.DrawRay(edge.p0.pos, Vector2.up * 4f, Color.black);
+                }
 
                 var key = UndirectedKey(edge.p0.Id, edge.p1.Id);
                 if (!edgeSet.Add(key))
