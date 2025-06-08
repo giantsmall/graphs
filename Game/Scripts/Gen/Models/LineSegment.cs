@@ -28,13 +28,14 @@ namespace Assets.Game.Scripts.Gen.Models
                 this.CalculatePathLength();
             } 
         }
-        public PtWSgmnts p1 { get => points.Last(); set { points[points.Count - 1] = value; } }
+        public PtWSgmnts p1 { get => points[^1]; set { points[^1] = value; } }
         public PtWSgmnts GetDirectionFromP0() => points[1];
         public PtWSgmnts GetDirectionFromP1() => points.LastButOne();
         public PtWSgmnts[] EdgePoints => new PtWSgmnts[] { p0, p1 };
 
         public bool HasConnectionWithCity { get; internal set; } = false;
         public bool Joined { get; internal set; } = false;
+        public bool Removable { get; internal set; } = true;
 
         public static LineSegment CreateTempSegment(PtWSgmnts p0, PtWSgmnts p1)
         {
@@ -51,12 +52,14 @@ namespace Assets.Game.Scripts.Gen.Models
         public LineSegment(Vector2 p0, Vector2 p1)
         {
             this.AddCheckPoints(new PtWSgmnts(p0), new PtWSgmnts(p1));
+            this.p0.AddNeighbour(this.p1);
             this.CalculatePathLength();
         }
 
         public LineSegment(List<PtWSgmnts> points, bool major = true)
         {
             this.points.AddRange(points);
+            this.p0.AddNeighbour(this.p1);
             if (major)
             {
                 this.p0.AddMainPath(this);
@@ -75,7 +78,8 @@ namespace Assets.Game.Scripts.Gen.Models
         {
             this.points.Add(p0);
             this.points.Add(p1);
-            if(major)
+            this.p0.AddNeighbour(this.p1);
+            if (major)
             {
                 this.p0.AddMainPath(this);
                 this.p1.AddMainPath(this);
@@ -125,9 +129,19 @@ namespace Assets.Game.Scripts.Gen.Models
         {
             return (PointsComparer.SameCoords(point, p0) || PointsComparer.SameCoords(point, p1));
         }
+        public bool ContainsEdgePointId(PtWSgmnts point)
+        {
+            return (PointsComparer.SameId(point, p0) || PointsComparer.SameId(point, p1));
+        }
+
         public bool ContainsAnyEdgePointPos(params PtWSgmnts[] points)
         {
 			return points.Any(p => ContainsEdgePointPos(p));
+        }
+
+        public bool ContainsAnyEdgePointId(params PtWSgmnts[] points)
+        {
+            return points.Any(p => ContainsEdgePointId(p));
         }
 
         public bool ContainsAllEdgePointsPos(params PtWSgmnts[] points)
@@ -266,11 +280,6 @@ namespace Assets.Game.Scripts.Gen.Models
             return points;
         }
 
-        internal void MergeTo(LineSegment roadToMergeTo)
-        {
-            WieldIntersectingRoads(0, this, roadToMergeTo);
-        }
-
         public static void WieldIntersectingRoads(params LineSegment[] roadsArr) => WieldIntersectingRoads(null, roadsArr);
 
         public static void WieldIntersectingRoads(int? indexToBeMerged, params LineSegment[] roadsArr)
@@ -384,16 +393,28 @@ namespace Assets.Game.Scripts.Gen.Models
             return oldSegment;
         }
 
-        internal LineSegment ReplaceFurtherEdgePt(Vector2 distanceTo, PtWSgmnts replaceWith)
+        internal LineSegment ReplaceOutsideEdgePtReturnOld(Vector2 distanceTo, PtWSgmnts replaceWith, District d)
         {
             var oldSegment = new LineSegment(p0, p1);
-            if (this.p0.DistanceTo(distanceTo) > this.p1.DistanceTo(distanceTo))
+
+            if (d.ContainsPoint(p1) && !d.ContainsPoint(p0))
             {
                 p0 = replaceWith;
             }
-            else
+            else if (!d.ContainsPoint(p1) && d.ContainsPoint(p0))
             {
                 p1 = replaceWith;
+            }
+            else if (!d.ContainsPoint(p1) && !d.ContainsPoint(p0))
+            {
+                if (this.p0.DistanceTo(replaceWith) < this.p1.DistanceTo(replaceWith))
+                    p0 = replaceWith;
+                else p1 = replaceWith;
+            }
+            else // both points are inside the district
+            {
+                if(!d.ContainsCheckpoint(p1) && !d.ContainsCheckpoint(p0))
+                    Debug.LogWarning($"Both points inside district -> there should be no intersection!! {replaceWith.pos}");
             }
             return oldSegment;
         }

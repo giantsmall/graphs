@@ -21,6 +21,7 @@ namespace Assets.Game.Scripts.Gen.Models
         public List<Block> Blocks { get; protected set; } = new();
         //protected List<PtWSgmnts>[] pointGroups;
         public List<Street> bStr = new List<Street>();
+        internal List<PtWSgmnts> intersections;
 
         public District(params Vector2[] vertices) : base(vertices)
         {
@@ -37,6 +38,24 @@ namespace Assets.Game.Scripts.Gen.Models
             Id = index++;
             //pointGroups = points;
             this.bStr = streets;
+        }
+
+        public District(List<Street> streets) : base()
+        {
+            Id = index++;
+            //pointGroups = points;
+            this.bStr = streets;
+            this.RefreshPtsFromRoads(true);
+        }
+
+        public void RefreshPtsFromRoads(bool FirstForlastRoad = true)
+        {
+            var r1InnPts = bStr[0].GetPointsUntilInnerCircle();
+            var r2InnPts = bStr[2].GetPointsUntilInnerCircle(FirstForlastRoad).Reversed();
+            var InnCirPts = bStr[1].points.TakeLesserRangeWrapped(bStr[0].InnerCircleInters, bStr[2].InnerCircleInters, false);
+            var pointArrays = new List<PtWSgmnts>[] { r1InnPts, InnCirPts, r2InnPts };
+            var many = pointArrays.SelectMany(p => p).ToList();
+            this.points = many.Distinct(new PointsComparer(true)).ToList();
         }
 
         [Obsolete]
@@ -157,9 +176,10 @@ namespace Assets.Game.Scripts.Gen.Models
         internal void ReorderPointsByAngle()
         {
             var center = this.FindCenter();
+            this.points = this.points.ReorderPointsByAngleCW(center);
             var p0 = this.points[0];
             this.points = this.points
-                .Distinct(new PointsComparer())
+                .Distinct(new PointsComparer(true))
                 .OrderBy(p => Vector2.SignedAngle(Vector2.right, p.pos - center)) // bardziej stabilne ni¿ `Angle()`
                 .ToList();
 

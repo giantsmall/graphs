@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Linq;
 using Assets.Game.Scripts.Utility;
+using UnityEngine.Rendering;
 
 namespace Assets.Game.Scripts.Gen.Models
 {
@@ -32,15 +33,17 @@ namespace Assets.Game.Scripts.Gen.Models
         public List<PtWSgmnts> neighbourCities = new();
         public List<PtWSgmnts> neighbourVillages = new();
         public List<PtWSgmnts> Neighbours = new();
+        public bool PartOfMainRoad = true;
 
         public PtWSgmnts(float x, float y) : base(x, y)
         {
             Id = instanceCount++;
         }
 
-        public PtWSgmnts(Vector2 p) : base(p.x, p.y)
+        public PtWSgmnts(Vector2 p, bool partOfMainRoad = true) : base(p.x, p.y)
         {
             Id = instanceCount++;
+            PartOfMainRoad = partOfMainRoad;
         }
 
         public PtWSgmnts() : base(0, 0)
@@ -206,22 +209,40 @@ namespace Assets.Game.Scripts.Gen.Models
 
     public class PointsComparer : EqualityComparer<PtWSgmnts>
     {
+        static bool boolIdMatters;
+        public PointsComparer(bool idMatters = false)
+        {
+            boolIdMatters = idMatters;
+        }
+
+
         public static bool SameCoords(PtWSgmnts p1, PtWSgmnts p2)
         {
             var sameCoord = p1.pos.x == p2.pos.x && p1.pos.y == p2.pos.y;
             return sameCoord;
         }
-
+        
         public static bool DifferentId(PtWSgmnts p1, PtWSgmnts p2)
         {
             return p1.Id != p2.Id;
         }
 
+        public static bool SameId(PtWSgmnts p1, PtWSgmnts p2)
+        {
+            return p1.Id == p2.Id;
+        }
+
         public static bool StaticEq(PtWSgmnts p1, PtWSgmnts p2)
         {
             var sameCoord = SameCoords(p1, p2);
+            
             var sameId = DifferentId(p1, p2);
-            return sameCoord || sameId;
+            var result = boolIdMatters ? (sameCoord && sameId) : (sameCoord || sameId);
+            if (result)
+            {
+                //Debug.LogWarning("Same pos with different id");
+            }
+            return result;
         }
 
         public override bool Equals(PtWSgmnts p1, PtWSgmnts p2)

@@ -26,9 +26,13 @@ namespace Assets.Game.Scripts.Editors
 
             gg.DrawDistricts = HandleToggle(nameof(gg.DrawDistricts), gg.DrawDistricts);
             gg.DrawBlocks = HandleToggle(nameof(gg.DrawBlocks), gg.DrawBlocks);
+            gg.DrawMainRoads = HandleToggle(nameof(gg.DrawMainRoads), gg.DrawMainRoads);
+            gg.InsertIntersections = HandleToggle(nameof(gg.InsertIntersections), gg.InsertIntersections);
 
             gg.MinEdgeLength = EditorGUILayout.FloatField(nameof(gg.MinEdgeLength), gg.MinEdgeLength);
             gg.MinBlockPtsRad = EditorGUILayout.FloatField(nameof(gg.MinBlockPtsRad), gg.MinBlockPtsRad);
+            gg.minPtsDistToNoTWield = EditorGUILayout.FloatField(nameof(gg.minPtsDistToNoTWield), gg.minPtsDistToNoTWield);
+
             GUILayout.BeginHorizontal();
             RoadGraphGenChaos.FixedRandom = EditorGUILayout.Toggle(nameof(RoadGraphGenChaos.FixedRandom), RoadGraphGenChaos.FixedRandom);
             RoadGraphGenChaos.Randomize = EditorGUILayout.Toggle(nameof(RoadGraphGenChaos.Randomize), RoadGraphGenChaos.Randomize);
@@ -40,8 +44,7 @@ namespace Assets.Game.Scripts.Editors
             if (GUILayout.Button("Regen prev")) { gg.GeneratePrev(); changed = true; }
             if (GUILayout.Button("Generate")) { gg.GenerateNext(); changed = true; }
             GUILayout.EndHorizontal();
-            
-            if(changed)
+            if (changed)
                 SceneView.RepaintAll();
         }
 

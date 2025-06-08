@@ -395,6 +395,26 @@ namespace Assets.Game.Scripts.Utility
             return list.GetRange(firstIndex, count);
         }
 
+        public static List<float> GetRandomSplit(this float sum, float min, float max, System.Random rnd)
+        {
+            var list = new List<float>();
+            do
+            {
+                var val = Math.Min(rnd.NextFloat(min, max), sum);
+                list.Add(val);
+                sum -= val;
+            }
+            while (sum > 0);
+            
+            if (list.Count > 1 && list.Last() < 1 && list.Last() + list.LastButOne() < max)
+            {
+                var oldLast = list.Last();
+                list.RemoveAt(list.Count - 1);
+                list[list.Count - 1] = list[list.Count - 1] + oldLast;
+            }
+            return list;
+        }
+
         public static void RotatePolygonAroundPivot(this Polygon r, Vector3 pivot, float angle)
         {
             for (int i = 0; i < r.points.Count; i++)
@@ -580,6 +600,17 @@ namespace Assets.Game.Scripts.Utility
                 .ToList();
 
         }
+
+        public static List<PtWSgmnts> ReorderPointsByAngleCW(this List<PtWSgmnts> points, Vector2 center)
+        {
+            var p0 = points[0];
+            return points
+                .Distinct()
+                .OrderBy(p => -Vector2.SignedAngle(Vector2.right, p.pos - center)) // bardziej stabilne niż `Angle()`
+                .ToList();
+
+        }
+
 
         public static List<Vector2> RotateAroundCenter(this List<Vector2> polygon, float angle)
         {

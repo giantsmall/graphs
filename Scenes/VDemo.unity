@@ -530,39 +530,21 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6835f5897b849e8499e88e4be0b7d811, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  DrawTriangles: 0
-  DrawSpanningTree: 0
+  DrawTriangles: 1
+  DrawSpanningTree: 1
   DrawEdges: 1
-  DrawRemovedEdges: 0
-  DrawBoundaries: 0
-  DrawDistricts: 0
-  DrawBlocks: 0
+  DrawRemovedEdges: 1
+  DrawBoundaries: 1
+  DrawDistricts: 1
+  DrawMainRoads: 1
+  DrawBlocks: 1
   DrawLots: 1
+  InsertIntersections: 1
   MinEdgeLength: 2
   MinBlockPtsRad: 8
+  minPtsDistToNoTWield: 1
   Population: 600
   MapSize: 100
-  rects:
-  - serializedVersion: 2
-    x: 48.27049
-    y: 52.12448
-    width: 0
-    height: 0
-  - serializedVersion: 2
-    x: 48.27049
-    y: 52.12448
-    width: 0
-    height: 0
-  - serializedVersion: 2
-    x: 48.27049
-    y: 52.12448
-    width: 0
-    height: 0
-  - serializedVersion: 2
-    x: 48.27049
-    y: 52.12448
-    width: 0
-    height: 0
 --- !u!1 &1921744100
 GameObject:
   m_ObjectHideFlags: 0
