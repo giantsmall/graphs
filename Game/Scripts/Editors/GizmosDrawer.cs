@@ -7,7 +7,7 @@ using Delaunay.Geo;
 
 namespace Assets.Game.Scripts.Editors
 {
-    public static class GizmoDrawer
+    public static class GizmosDrawer
     {
         static void DrawLine(Vector2 p1, Vector2 p2)
         {
@@ -21,11 +21,16 @@ namespace Assets.Game.Scripts.Editors
 
         public static void DrawSpheres(List<PtWSgmnts> pts, float sphereSize, float itSizeChange = 0f)
         {
+            DrawSpheres(pts, Vector2.zero, sphereSize, itSizeChange);
+        }
+
+        public static void DrawSpheres(List<Vector2> pts, float sphereSize, float itSizeChange = 0f)
+        {
             if (sphereSize > 0)
             {
                 foreach (var pt in pts)
                 {
-                    Gizmos.DrawSphere(pt.pos, sphereSize);
+                    Gizmos.DrawSphere(pt, sphereSize);
                     sphereSize += itSizeChange;
                 }
             }
@@ -148,6 +153,11 @@ namespace Assets.Game.Scripts.Editors
             DrawSpheres(list, shift, circleSize);
             if (looped)
                 Gizmos.DrawLine(list.Last().pos + shift, list.First().pos + shift);
+        }
+
+        internal static void DrawRay(Vector2 value, Color color)
+        {
+            Debug.DrawRay(value, Vector2.up * 5f, color);
         }
     }
 }

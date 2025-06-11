@@ -247,6 +247,7 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
 
             foreach (var e in missingEdges)
             {
+                break;
                 Debug.LogWarning($"{commentPRefix}: Krawędź niepokryta przez żaden cykl: {e}");
             }
                 

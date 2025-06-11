@@ -187,37 +187,6 @@ namespace Assets.Game.Scripts.Gen.Models
             }
         }
 
-        internal List<PtWSgmnts> CheckForDistrictEdgePoints(SettlementModel s)
-        {
-            var r1InnerPts = bStr[0].GetPointsUntilInnerCircle();
-            var r2InnerPts = bStr[2].GetPointsUntilInnerCircle(false);
-            var index1 = bStr[0].IntersIndex;
-            var incex2 = bStr[2].IntersIndex;
-            var innerCircPts = bStr[bStr.IndexOf(s.innerCircleStreet)].points.TakeLesserRangeWrapped(bStr[0].InnerCircleInters, bStr[2].InnerCircleInters, false);
-            
-            var newPts = new List<PtWSgmnts>();
-            newPts.AddRange(r1InnerPts.Where(p => !this.ContainsCheckpoint(p)).ToList());
-            newPts.AddRange(innerCircPts.Where(p => !this.ContainsCheckpoint(p)).ToList());
-            newPts.AddRange(r2InnerPts.Reversed().Where(p => !this.ContainsCheckpoint(p)).ToList());
-
-            if (newPts.Any())
-            {
-                this.points.AddRange(newPts);
-
-                // Spróbuj posortowaæ, jeœli s¹ duplikaty
-                var center = this.FindCenter();
-                var distinctPts = this.points.Distinct(new PointsComparer(false)).ToList();
-                if (distinctPts.Count < this.points.Count)
-                {
-                    this.points = this.points
-                        .OrderBy(p => Vector2.SignedAngle(p.pos - center, Vector2.right))
-                        .ToList();
-                }
-            }
-
-            return this.points;
-        }
-
         // Proste porównanie dwóch list punktów pod wzglêdem pozycji (z tolerancj¹)
         private bool ArePointListsEqual(List<PtWSgmnts> a, List<PtWSgmnts> b)
         {

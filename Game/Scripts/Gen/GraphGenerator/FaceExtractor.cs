@@ -10,7 +10,7 @@ namespace Assets.Game.Scripts.Gen
 {
     public static class FaceExtractor
     {
-        public static List<List<PtWSgmnts>> ExtractMinimalCoveringFacesIterative(List<LineSegment> edges, int iterations = 10)
+        public static List<Polygon> ExtractMinimalCoveringFacesIterative(List<LineSegment> edges, int iterations = 10)
         {
             var allEdges = new HashSet<string>(edges.Select(e => EdgeKey(e.p0.Id, e.p1.Id)));
             var allCycles = new List<List<PtWSgmnts>>();
@@ -57,7 +57,7 @@ namespace Assets.Game.Scripts.Gen
                     break;
             }
 
-            return result;
+            return result.Select(l => new Polygon(l)).ToList();
         }
         
         private static List<List<PtWSgmnts>> ExtractFacesRandomized(List<LineSegment> edges, System.Random rng)

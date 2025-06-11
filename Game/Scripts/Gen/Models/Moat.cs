@@ -7,15 +7,15 @@ using UnityEngine;
 
 namespace Assets.Game.Scripts.Gen.Models
 {
-    public class Wall: LineSegment
+    public class Moat : LineSegment
     {
-        public Wall()
+        public Moat()
         {
         }
 
-        public Wall(Polygon polygon, float thickness) :base(polygon.points, thickness)
+        public Moat(Polygon polygon, float thickness) : base(polygon.points, thickness)
         {
-            
+
         }
     }
 }

@@ -19,6 +19,11 @@ namespace Assets.Game.Scripts.Gen.Models
             this.parentBlock = parentBlock;
         }
 
+        public Lot(List<Vector2> points)
+        {
+            this.points = points.Select(p => new PtWSgmnts(p)).ToList();
+            this.parentBlock = null;
+        }
         internal void AssignStreets(List<Street> streets)
         {
             this.streets = streets.Where(s => s.ContainsAnyPoint(this.points)).ToList();

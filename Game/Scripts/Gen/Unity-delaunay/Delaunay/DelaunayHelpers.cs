@@ -46,10 +46,7 @@ namespace Delaunay
                     PtWSgmnts newP2 = points.FirstOrDefault(p => p.pos.Equals(p1));
 					if(newP2 is null)
                         newP2 = new PtWSgmnts(p2);
-
                     var segment = new LineSegment(newP1, newP2);
-
-
                     segments.Add (segment);
 				}
 			}

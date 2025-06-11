@@ -153,7 +153,6 @@ namespace Delaunay
             return DelaunayHelpers.DelaunayLinesForEdges(DelaunayHelpers.SelectNonIntersectingEdges(/*keepOutMask,*/_edges), points);
         }
 
-
         
         public List<LineSegment> Hull ()
 		{

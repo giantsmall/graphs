@@ -501,7 +501,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &1739222706
 Transform:
@@ -539,12 +539,30 @@ MonoBehaviour:
   DrawMainRoads: 1
   DrawBlocks: 1
   DrawLots: 1
-  InsertIntersections: 1
-  MinEdgeLength: 2
-  MinBlockPtsRad: 8
+  minLotWidth: 1
+  maxLotWidth: 2
+  minLotDepth: 1
+  maxLotDepth: 2
+  MinBlockAreaToPutShortEdgesAway: 4
+  mainRoadsCount: 3
+  DealWithShortBlockEdges: 1
+  CreateLots: 0
+  MinEdgeLength: 1.5
   minPtsDistToNoTWield: 1
-  Population: 600
+  InnerCirDistrictCount: 6
+  InnerVoronoiSize: 5
+  OuterVoronoiSize: 10
+  InnerCirclePopulation: 600
+  PopulationOutsideInnerCircle: 400
+  PolishInnerCircle: 1
+  WallThickness: 0.2
+  RoadWidth: 0.4
+  MoatWidth: 0.2
+  MoatDistFromWall: 0.3
+  MoatDistToRoad: 0.3
   MapSize: 100
+  BuildMoat: 1
+  BuildWall: 1
 --- !u!1 &1921744100
 GameObject:
   m_ObjectHideFlags: 0

@@ -67,7 +67,7 @@ namespace Assets.Game.Scripts.Gen.WorldGen
 
         void OnDrawGizmos()
         {
-            GizmoDrawer.DrawGizmos(worldModel);
+            GizmosDrawer.DrawGizmos(worldModel);
         }
     }
 }

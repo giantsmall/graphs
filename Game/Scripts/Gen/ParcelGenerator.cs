@@ -1,4 +1,5 @@
 ﻿using Assets.Game.Scripts.Editors;
+using Assets.Game.Scripts.Gen.GraphGenerator;
 using Assets.Game.Scripts.Gen.Models;
 using Assets.Game.Scripts.Utility;
 using Delaunay;
@@ -15,6 +16,8 @@ using UnityEngine.Rendering.Universal.Internal;
 
 namespace Assets.Game.Scripts.Gen
 {
+
+
     public class ParcelGenerator: MonoBehaviour
     {
         public void Start()
@@ -22,36 +25,38 @@ namespace Assets.Game.Scripts.Gen
 
         }
 
-        List<List<Vector2>> parcels = new();
-        List<Vector2> cycle = new();
+        List<Polygon> parcels = new();
+        List<List<Vector2>> cycles = new();
         public void OnDrawGizmos()
         {
             var shift = new Vector2(-25.5f, -25.5f);
             shift = Vector2.zero;
             foreach (var parcel in parcels)
             {
-                GizmoDrawer.DrawVectorList(parcel, shift, true, 0.15f);
+                GizmosDrawer.DrawVectorList(parcel.points, shift, true, 0.15f);
             //    shift += new Vector2(.15f, .15f);
             }
 
-            //shift = new Vector2(.1f, .1f);
             Gizmos.color = Color.yellow;
-            GizmoDrawer.DrawVectorList(cycle, shift, true, 0.05f);
+            foreach(var cycle in cycles)
+                GizmosDrawer.DrawVectorList(cycle, shift, true, 0.05f);
         }
         public void Generate()
         {
+            
+            RoadGraphGenChaos.ClearLog();
             index = 0;
             parcels.Clear();
+            cycles.Clear();
             var seed = 2094867748;
             var rnd = new System.Random(seed);
             Debug.Log(seed);
 
             var radius = 15f;
             var pointCount = rnd.Next(4, 6);
-            var minWidth = 4;
+            var minWidth = 4f;
 
-            cycle = GenerateRandomClosedCycle(pointCount, radius, rnd);
-
+            var cycle = GenerateRandomClosedCycle(pointCount, radius, rnd);
             for (int i = 0; i < cycle.Count; i++)
             {
                 var curr = cycle[i];
@@ -61,27 +66,39 @@ namespace Assets.Game.Scripts.Gen
                     cycle.RemoveAt(i);
                 }
             }
-
             cycle = cycle.RotateAroundCenter(-180);
             cycle = cycle.ReorderPointsByAngleCW();
-
             var last2 = cycle.TakeLast(2).ToList();
             cycle.RemoveList(last2);
             cycle.InsertRange(0, last2);
 
+            cycles.Add(cycle);
+            parcels = MakeLots(rnd, new Polygon(cycle), 2, 3, 2, 3);
+
+            minWidth = 3f;
+            var maxWidth = 6f;
+            var minDepth = 3f;
+            var maxDepth = 5f;
+
+            
+            var trapez = new List<Vector2>() { new Vector2(), new Vector2(4 * minWidth, 0), new Vector2(3.5f * minWidth, maxDepth), new Vector2(0, maxDepth) };
+            cycles.Add(trapez);
+            parcels.AddRange(MakeLots(rnd, new Polygon(trapez), 2, 3, 2, 3));
+
+            var shallowRect = new List<Vector2>() { new Vector2(), new Vector2(4 * minWidth, 0), new Vector2(4 * minWidth, minDepth), new Vector2(0, 3) };
+            shallowRect.ShiftBy(new Vector2(20f, 0));
+            cycles.Add(shallowRect);
+            parcels.AddRange(MakeLots(rnd, new Polygon(shallowRect), 2, 3, 2, 3));
+
+            var deltoid = new List<Vector2>() { new Vector2(0, 0), new Vector2(minWidth, 4 * maxWidth), new Vector2(0, 5 * maxWidth), new Vector2(-minWidth, 4 * maxWidth) };
+            deltoid.ShiftBy(new Vector2(40f, 0));
+            cycles.Add(deltoid);
+            parcels.AddRange(MakeLots(rnd, new Polygon(deltoid), 2, 3, 2, 3));
+
             SceneView.RepaintAll();
-
-            //Debug.DrawRay(cycle[0], Vector2.up * 2f, Color.cyan);
-            //Debug.DrawRay(cycle[1], Vector2.up * 2f, Color.cyan);
-            //Debug.DrawRay(cycle[2], Vector2.up * 2f, Color.cyan);
-            //SceneView.RepaintAll();
-            //return;
-            //parcels = MakeLotsByCuttingEdges(rnd, cycle.ToList(), rnd.NextFloat(4, 7));
-            //rnd = new System.Random();
+            
             rnd = new System.Random();
-            parcels = MakeLotsBasedOnAngle(rnd, cycle, 4, 5, minWidth, 5);
-            Debug.Log("Generated");
-
+            //parcels = MakeLotsBasedOnAngle(rnd, cycle, 4, 5, minWidth, 5);
         }
 
         class AngleDivision
@@ -135,7 +152,6 @@ namespace Assets.Game.Scripts.Gen
                 DrawPolygon(pts, colors[index++]);
             }
         }
-
         class LotPts
         {
             public Vector2 LastDeep, FirstDeep, LastShallow, FirstShallow, MeetInTheMiddle;
@@ -166,7 +182,120 @@ namespace Assets.Game.Scripts.Gen
             }
         }
 
-        public static List<List<Vector2>> MakeLotsBasedOnAngle(System.Random rnd, List<Vector2> poly, float minDepth, float maxDepth, float minWidth, float maxWidth, float maxSmallAngle = 110)
+        public static List<Polygon> MakeLots(System.Random rnd, Polygon block, float minDepth, float maxDepth, float minWidth, float maxWidth, float maxSmallAngle = 110)
+        {
+            var dists = block.GetEdgeDistancesToCenter();
+            var edgesLens = block.GetEdgeLengths();
+            var shortestEdge = edgesLens.Min();            
+            var longestEdge = edgesLens.Max();
+            var longestEdgeIndex = edgesLens.IndexOf(longestEdge);
+            var shortestEdgeIndex = edgesLens.IndexOf(shortestEdge);
+            var avgLen = edgesLens.Average();
+            var blockArea = block.CalculateArea();            
+            var minArea = minDepth * minWidth;
+            Debug.Log($"Shortest len to average ratio = {shortestEdge / (avgLen / 2f)}");
+            Debug.Log($"Shortest len wider than min width: {shortestEdge} vs {minWidth}");
+            Debug.Log($"Area: {blockArea}, min = {minArea}");
+
+            var result = new List<Polygon>();
+            var shortestLenCondition = shortestEdge > maxWidth && shortestEdge > avgLen / 2f;
+            var minAreaConditionMet = blockArea > minArea;
+
+            if(!minAreaConditionMet)
+            {
+                result.Add(new Polygon(MakeSingleLot(block)));
+                return result;
+            }
+
+            if (block.points.Count < 3)
+            {
+                Debug.LogError("Block has less than 3 points");
+            }
+
+
+            if (block.points.Count == 3)
+            {
+                var triangleNiceAndSmooth = shortestLenCondition;
+                var heightOfLongestEdgeBigEnough = block.GetHeightOfEdge(longestEdgeIndex) > minDepth;
+                if (triangleNiceAndSmooth)
+                {
+                    result = MakeLotsBasedOnAngle(rnd, block, minDepth, maxDepth, minWidth, maxWidth, maxSmallAngle);
+                }
+                else if(heightOfLongestEdgeBigEnough)
+                {
+                    result.Add(new Polygon(MakeSingleLot(block)));
+                }
+                else if (!heightOfLongestEdgeBigEnough)
+                {
+                    result.Add(new Polygon(MakeSingleLot(block)));
+                }
+                return result;
+            }
+
+            if (!shortestLenCondition)
+            {
+                (Polygon cutLot, Polygon newPolygon) = CutOffShortestEge(block, shortestEdgeIndex);
+            }
+
+            //rect
+            //no edges too short
+            if (block.points.Count == 4)
+            {
+                var niceRect = shortestLenCondition;
+                var deepEnough = dists.All(d => d > minDepth);
+                if (niceRect && deepEnough)
+                {
+                    result = MakeLotsBasedOnAngle(rnd, block, minDepth, maxDepth, minWidth, maxWidth, maxSmallAngle);
+                }                
+                else if (!deepEnough && longestEdge > 2 * minWidth)
+                {
+                    result = MakeSingleLotLayerPerpToLongestEdge(rnd, block, minDepth, maxDepth, minWidth, maxWidth);
+                }
+                else if(deepEnough && longestEdge > 2 * minWidth)
+                {
+                    result = MakeTwoLotLayerPerpToLongestEdge(rnd, block, minDepth, maxDepth, minWidth, maxWidth);
+                }
+            }
+            
+            //pentagon
+            if (block.points.Count >= 5)
+            {
+                var pentagonNiceAndSmooth = shortestLenCondition;
+                if (pentagonNiceAndSmooth)
+                {
+                    result = MakeLotsBasedOnAngle(rnd, block, minDepth, maxDepth, minWidth, maxWidth, maxSmallAngle);
+                }
+                else
+                {
+                    Debug.LogWarning("Pentagon not nice enough");
+                }
+            }
+            return result;
+        }
+
+        private static (Polygon cutLot, Polygon newPolygon) CutOffShortestEge(Polygon block, int shortestEdgeIndex)
+        {
+            //make perp line based on angles with neighbours and get offset distance to cut
+
+            var prevP = block.points.Neighbour(shortestEdgeIndex, -1);
+            var shortestEdgeP1 = block.points[shortestEdgeIndex];
+            var shortestEdgePNext = block.points.Neighbour(shortestEdgeIndex, 1);
+            var nextP = block.points.Neighbour(shortestEdgeIndex, 2);
+
+            var prevAng = Vector2.Angle(prevP.pos - shortestEdgeP1.pos, shortestEdgePNext.pos - shortestEdgeP1.pos);
+            var nextAng = Vector2.Angle(nextP.pos - shortestEdgePNext.pos, shortestEdgePNext.pos - shortestEdgeP1.pos);
+
+
+            var cutLot = new Polygon();
+            var newPolygon = new Polygon();
+            return (cutLot, newPolygon);
+        }
+
+        public static List<Polygon> MakeLotsBasedOnAngle(System.Random rnd, Polygon poly, float minDepth, float maxDepth, float minWidth, float maxWidth, float maxSmallAngle = 110)
+        {
+            return MakeLotsBasedOnAngle(rnd, poly.GetVectors(), minDepth, maxDepth, minWidth, maxWidth);
+        }
+        public static List<Polygon> MakeLotsBasedOnAngle(System.Random rnd, List<Vector2> poly, float minDepth, float maxDepth, float minWidth, float maxWidth, float maxSmallAngle = 110)
         {
             var lots = new List<List<Vector2>>();
             var center = poly.FindCenter();
@@ -210,84 +339,12 @@ namespace Assets.Game.Scripts.Gen
                 {
                     var t = rnDep / ((poly[0] - nextP).magnitude);
                     var rotPt = Vector2.Lerp(poly[0], nextP, t);
-                    (meetInTheMiddle, shallowMeeti, shallowMeetiPlus1) = MeetIntersAndGetShallowMeetsForBigAngle(poly, i, depths[i], depths.Neighbour(i, 1));
-                    var (offset1, offset2) = MeetIntersAndGetOffsetsForBigAngle(poly, i, depths[i], depths.Neighbour(i, 1));
+                    (meetInTheMiddle, shallowMeeti, shallowMeetiPlus1) = MeetIntersAndGetShallowMeetsForBigAngle(poly, i, depths);
+                    //var (offset1, offset2) = MeetIntersAndGetOffsetsForBigAngle(poly, i, depths[i], depths.Neighbour(i, 1));
                     //var lot = new List<Vector2>() { shallowMeeti, poly[i], shallowMeetiPlus1, meetInTheMiddle, };                    
                     //lots.Add(lot.ReorderPointsByAngleCCW());
                     lotPtsList.Add(new LotPts(meetInTheMiddle, shallowMeetiPlus1, meetInTheMiddle, shallowMeeti, meetInTheMiddle));
                 }
-            }
-
-            for (int i = 0; i < angles.Count; i++)
-            {
-                break;
-                var minLotArea = minWidth * minDepth;
-                var rnDep = depths[i];
-                var prevP = poly.Neighbour(i, -1);
-                var nextP = poly.Neighbour(i, 1);
-                var next2P = poly.Neighbour(i, 2);
-
-                Vector2 prevDeepMeet = Vector2.zero, prevShallowMeet = Vector2.zero, nextDeepMeet = Vector2.zero, nextShallowMeet = Vector2.zero;
-                var takenWidth = 0f;
-                var distFromPrevEdgeLot = Vector2.Distance(lotPtsList.Neighbour(i, -1).LastDeep, lotPtsList[i].FirstDeep);
-                bool firstDone = Mathf.Abs(90 - angles[i]) > 5;
-                if (firstDone)
-                {
-                    var x = Mathf.Sqrt(depths.Neighbour(i, 1).Pow(2) + depths[i].Pow(2));
-                    var sizeFactor = rnd.NextFloat();
-                    if (distFromPrevEdgeLot < maxWidth / 8f)
-                    {
-                        prevDeepMeet = lotPtsList.Last().LastDeep;
-                        prevShallowMeet = lotPtsList.Last().LastShallow;
-                        takenWidth = distFromPrevEdgeLot;
-                    }
-                    else
-                    {
-                        var maxPrevDist = Math.Min(maxWidth / 4f, distFromPrevEdgeLot);
-                        var minPrevDist = Math.Max(minWidth / 4f, distFromPrevEdgeLot);
-                        var dist = rnd.NextFloat(minPrevDist, maxPrevDist);
-                        var t = dist / distFromPrevEdgeLot;
-                        prevDeepMeet = Vector2.Lerp(lotPtsList[i].FirstDeep, lotPtsList.Neighbour(i, -1).LastDeep, t);
-                        prevShallowMeet = Vector2.Lerp(lotPtsList[i].FirstShallow, lotPtsList.Neighbour(i, -1).LastShallow, t);
-                        takenWidth = dist;
-                    }
-                }
-
-                bool secondDone = Mathf.Abs(90 - angles[i]) > 5;
-                var distToNextLot = Vector2.Distance(lotPtsList[i].LastDeep, lotPtsList.Neighbour(i, 1).FirstDeep);
-                if (secondDone)
-                {
-                    if (distToNextLot < maxWidth / 8f)
-                    {
-                        nextDeepMeet = lotPtsList[i].FirstDeep;
-                        nextShallowMeet = lotPtsList[i].FirstShallow;
-                        takenWidth += distToNextLot;
-                    }
-                    else
-                    {
-                        var maxNextDist = Math.Min(maxWidth / 4f - takenWidth, distFromPrevEdgeLot);
-                        var minNextDist = Math.Max(minWidth / 4f - takenWidth, distFromPrevEdgeLot);
-                        var nextDist = rnd.NextFloat(minNextDist, maxNextDist);
-
-                        var t = nextDist / (nextP - lotPtsList[i].LastDeep).magnitude;
-                        nextDeepMeet = Vector2.Lerp(lotPtsList[i].LastDeep, lotPtsList.Neighbour(i, 1).FirstDeep, t);
-                        nextShallowMeet = Vector2.Lerp(lotPtsList[i].LastShallow, lotPtsList.Neighbour(i, 1).FirstShallow, t);
-                    }
-                }
-
-                var lot = new List<Vector2>() { lotPtsList[i].FirstShallow, poly[i], lotPtsList[i].LastShallow };
-                if (secondDone)
-                {
-                    lot.Add(nextShallowMeet);
-                    lot.Add(nextDeepMeet);
-                }
-                lot.Add(lotPtsList[i].MeetInTheMiddle);
-                if(firstDone)
-                {
-                    lot.Add(prevDeepMeet);
-                    lot.Add(prevShallowMeet);
-                }
-                lots.Add(lot);
             }
 
             for (int i = 0; i < angles.Count; i++)
@@ -304,66 +361,92 @@ namespace Assets.Game.Scripts.Gen
                 var currLot = lotPtsList[i];
 
                 edgeLot.AddItems(currLot.FirstShallow, currLot.FirstDeep, prevLot.LastDeep, prevLot.LastShallow);
-                var lotWidth = (currLot.FirstDeep - prevLot.LastDeep).magnitude;
-                var lotWidths = new List<float>();
-                if (lotWidth > maxWidth)
-                {
-                    lotWidths.AddRange(lotWidth.GetRandomSplit(minWidth, maxWidth, rnd));
-                }
-                else lotWidths.Add(lotWidth);
-                var dividedLots = new List<EdgeLotPart>();
+                lots.Add(edgeLot);
+                //var lotWidth = (currLot.FirstDeep - prevLot.LastDeep).magnitude;
+                //var lotWidths = new List<float>();
+                //if (lotWidth > maxWidth)
+                //{
+                //    lotWidths.AddRange(lotWidth.GetRandomSplit(minWidth, maxWidth, rnd));
+                //}
+                //else lotWidths.Add(lotWidth);
 
-                var prevLotLastDeep = prevLot.LastDeep;
-                var prevLotLastShallow = prevLot.LastShallow;
-                var lotIndex = 0;
-                foreach (var lotW in lotWidths)
-                {
-                    var t = lotW / lotWidth;
-                    lotWidth -= lotW;
-                    var newLastShallow = Vector2.Lerp(prevLotLastShallow, currLot.FirstShallow, t);
-                    var newLastDeep = Vector2.Lerp(prevLotLastDeep, currLot.FirstDeep, t);
+                //var prevLotLastDeep = prevLot.LastDeep;
+                //var prevLotLastShallow = prevLot.LastShallow;
+                //var lotIndex = 0;
+                //foreach (var lotW in lotWidths)
+                //{
+                //    var t = lotW / lotWidth;
+                //    lotWidth -= lotW;
+                //    var newLastShallow = Vector2.Lerp(prevLotLastShallow, currLot.FirstShallow, t);
+                //    var newLastDeep = Vector2.Lerp(prevLotLastDeep, currLot.FirstDeep, t);
 
-                    var lot = new List<Vector2>() { newLastDeep, prevLotLastDeep, prevLotLastShallow, newLastShallow };
-                    edgeLots.Add(lot);
-                    lots.Insert(i + lotIndex++, lot);
+                //    var lot = new List<Vector2>() { newLastDeep, prevLotLastDeep, prevLotLastShallow, newLastShallow };
+                //    edgeLots.Add(lot);
+                //    lots.Insert(i + lotIndex++, lot);
 
-                    prevLotLastDeep = newLastDeep;
-                    prevLotLastShallow = newLastShallow;
-                }                
+                //    prevLotLastDeep = newLastDeep;
+                //    prevLotLastShallow = newLastShallow;
+                //}                
             }
-            return lots;
+            return lots.Select(l => new Polygon(l)).ToList();
             //return edgeLots;
+        }
+
+        public static List<Polygon> MakeSingleLotLayerPerpToLongestEdge(System.Random rnd, Polygon poly, float minDepth, float maxDepth, float minWidth, float maxWidth)
+        {
+            //throw new Exception("MakeSingleLotLayerPerpToLongestEdge - Work in progress");
+            var longestEdge = poly.GetEdgeLengths().OrderBy(l => l).First();
+            var longestEdgeIndex = poly.GetEdgeLength(longestEdge);
+            var lots = new List<List<Vector2>>();
+            var lotWidths = new List<float>();
+            if (longestEdge > maxWidth)
+            {
+                lotWidths.AddRange(longestEdge.GetRandomSplit(minWidth, maxWidth, rnd));
+            }
+            else lotWidths.Add(longestEdge);
+
+            var prevLotLastDeep = Vector2.zero; //intersect any edge perp to longestOne at its start? or just take any vertext
+            var prevLotLastShallow = poly.points[longestEdgeIndex].pos;
+            foreach (var lotW in lotWidths)
+            {
+                var t = lotW / longestEdge;
+                longestEdge -= lotW;
+                var newLastShallow = Vector2.Lerp(prevLotLastShallow, poly.points.Neighbour(longestEdgeIndex, 1).pos, t);
+                var newLastDeep = Vector2.zero; //intersect any edge perp to longestOne
+
+                var lot = new List<Vector2>() { newLastDeep, prevLotLastDeep, prevLotLastShallow, newLastShallow };
+                lots.Add(lot);
+
+                prevLotLastDeep = newLastDeep;
+                prevLotLastShallow = newLastShallow;
+            }
+
+            return lots.Select(l => new Polygon(l)).ToList();
+        }
+
+        public static List<Vector2> MakeSingleLot(Polygon poly)
+        {
+            Debug.LogWarning($"Not Implemented: {nameof(MakeSingleLot)}");
+            return poly.GetVectors();
+        }
+
+        public static List<Polygon> MakeTwoLotLayerPerpToLongestEdge(System.Random rnd, Polygon poly, float minDepth, float maxDepth, float minWidth, float maxWidth)
+        {
+            Debug.LogWarning($"Not Implemented: {nameof(MakeTwoLotLayerPerpToLongestEdge)}");
+            var lots = new List<Polygon>();
+            return lots;
         }
 
         public static float PerpendicularDistance(LineSegment line, PtWSgmnts point)
         {
-            var inters = GetPerpendicularIntersection(line.p0.pos, line.p1.pos, point.pos);
+            var inters = VectorIntersect.GetPerpendicularIntersection(line.p0.pos, line.p1.pos, point.pos);
             return inters.DistanceTo(point.pos);
         }
 
         public static float PerpendicularDistance(Vector2 start, Vector2 end, Vector2 point)
         {
-            var inters = GetPerpendicularIntersection(start, end, point);
+            var inters = VectorIntersect.GetPerpendicularIntersection(start, end, point);
             return inters.DistanceTo(point);
-        }
-
-        public static Vector2 GetPerpendicularIntersection(Vector2 start, Vector2 end, Vector2 point)
-        {
-            Vector2 AB = end - start;
-            Vector2 AP = point - start;
-
-            float t = Vector2.Dot(AP, AB) / Vector2.Dot(AB, AB);
-
-            // Punkt przecięcia
-            Vector2 H = start + t * AB;
-
-            if (false)// (draw)
-            {
-                Debug.DrawRay(H, Vector2.up * 2f, Color.green, 3f);
-                Debug.DrawLine(start, end, Color.yellow, 3f);
-                Debug.DrawLine(point, H, Color.red, 3f);
-            }
-            return H;
         }
 
 
@@ -371,26 +454,19 @@ namespace Assets.Game.Scripts.Gen
         static Vector2 GetOffsetAndInters(Vector2 nextP, float rnDep, Vector2 currP, Vector2 prevP, List<Vector2> poly)
         {
             var (offset1, offset2) = GetOffsetLine(nextP, currP, rnDep, (nextP - currP).magnitude * 2, poly);
-            if (false) //(draw)
+            var intsr = VectorIntersect.GetIntersectionPoint(offset1, offset2, currP, prevP);
+
+            if(intsr.HasValue)
             {
-                DrawPolygon(new List<Vector2> { nextP, currP }, (index++ == 0 ? Color.cyan : Color.red));
-                DrawPolygon(new List<Vector2> { offset1, offset2 }, (index++ == 0 ? Color.cyan : Color.red));
+                return intsr.Value;
             }
-            return VectorIntersect.GetIntersectionPoint(offset1, offset2, currP, prevP).Value;
-        }
-
-        static Vector2 MeetIntersectionsInTheMiddle(List<Vector2> p, int vIndex, float distance, float nextDistance)
-        {
-            Vector2 result = Vector2.zero;
-            var currP = p[vIndex];
-            var prevP = p[(vIndex - 1 + p.Count) % p.Count];
-            var nextP = p[(vIndex + 1) % p.Count];
-            var offset1 = GetOffsetLine(prevP, currP, distance, (prevP - currP).magnitude / 2f, p);
-            var offset2 = GetOffsetLine(nextP, currP, nextDistance, (nextP - currP).magnitude / 2f, p);
-
-            var inters = VectorIntersect.GetIntersectionPoint(offset1.Item1, offset1.Item2, offset2.Item1, offset2.Item2);
-            //Debug.DrawRay(inters.Value, Vector2.up * 3f, Color.red, 3f);
-            return inters.Value;            
+            else
+            {
+                
+                //Debug.DrawLine(offset1, offset2, Color.red);
+                //Debug.DrawLine(nextP, currP, Color.blue);
+                return Vector2.zero;
+            }
         }
 
         /// <summary>
@@ -409,27 +485,48 @@ namespace Assets.Game.Scripts.Gen
             var offset1 = GetOffsetLine(prevP, currP, distance, (prevP - currP).magnitude / 2f, p);
             var offset2 = GetOffsetLine(nextP, currP, nextDistance, (nextP - currP).magnitude / 2f, p);
             var inters = VectorIntersect.GetIntersectionPoint(offset1.Item1, offset1.Item2, offset2.Item1, offset2.Item2);
-            var shallowPrev = GetPerpendicularIntersection(prevP, currP, inters.Value);
-            var shallowNext = GetPerpendicularIntersection(nextP, currP, inters.Value);
+            Vector2 shallowPrev = Vector2.zero, shallowNext = Vector2.zero;
+            if (inters.HasValue)
+            {
+                shallowPrev = VectorIntersect.GetPerpendicularIntersection(prevP, currP, inters.Value);
+                shallowNext = VectorIntersect.GetPerpendicularIntersection(nextP, currP, inters.Value);
+            }
+            else
+            {
+                Debug.DrawLine(offset1.Item1, offset1.Item2, Color.red);
+                Debug.DrawLine(offset2.Item1, offset2.Item2, Color.blue);
+            }
             return (inters.Value, shallowPrev, shallowNext);
         }
 
-        static (Vector2, Vector2, Vector2) MeetIntersAndGetShallowMeetsForBigAngle(List<Vector2> p, int vIndex, float distance, float nextDistance, bool draw = false)
-        {
-            var currP = p[vIndex];
-            var prevP = p[(vIndex - 1 + p.Count) % p.Count];
-            var nextP = p[(vIndex + 1) % p.Count];
-            var offset1 = GetOffsetLine(prevP, currP, distance, (prevP - currP).magnitude / 2f, p);
-            var offset2 = GetOffsetLine(nextP, currP, nextDistance, (nextP - currP).magnitude / 2f, p);
+        static (Vector2, Vector2, Vector2) MeetIntersAndGetShallowMeetsForBigAngle(List<Vector2> p, int index, List<float> distances, bool draw = false)
+        {            
+            var currP = p[index];
+            var prevP = p.Neighbour(index, -1);
+            var nextP = p.Neighbour(index, 1);
+
+            var nextI = p.IndexOf(nextP);
+
+            var offset1 = GetOffsetLine(prevP, currP, distances[index], (prevP - currP).magnitude * 2f, p);
+            var offset2 = GetOffsetLine(nextP, currP, distances[nextI], (nextP - currP).magnitude * 2f, p);
             var inters = VectorIntersect.GetIntersectionPoint(offset1.Item1, offset1.Item2, offset2.Item1, offset2.Item2);
             if(!inters.HasValue)
             {
-                Debug.DrawLine(offset1.Item1, offset1.Item2);
-                Debug.DrawLine(offset2.Item1, offset2.Item2);
+                var next2P = p.Neighbour(index, 2);
+                var next2I = p.IndexOf(next2P);
+                offset1 = GetOffsetLine(prevP, currP, distances[index], (prevP - currP).magnitude * 2f, p);
+                offset2 = GetOffsetLine(next2P, nextP, distances[next2I], (next2P - nextP).magnitude * 2f, p);
+                inters = VectorIntersect.GetIntersectionPoint(offset1.Item1, offset1.Item2, offset2.Item1, offset2.Item2);
+                if(!inters.HasValue)
+                {
+                    Debug.LogError("Intersection has no value again ;/");
+                    Debug.DrawLine(offset1.Item1, offset1.Item2, Color.green);
+                    Debug.DrawLine(offset2.Item1, offset2.Item2, Color.blue);
+                }
             }
 
-            var shallowPrev = GetPerpendicularIntersection(prevP, currP, inters.Value);
-            var shallowNext = GetPerpendicularIntersection(nextP, currP, inters.Value);
+            var shallowPrev = VectorIntersect.GetPerpendicularIntersection(prevP, currP, inters.Value);
+            var shallowNext = VectorIntersect.GetPerpendicularIntersection(nextP, currP, inters.Value);
             return (inters.Value, shallowPrev, shallowNext);
         }
 
@@ -442,71 +539,20 @@ namespace Assets.Game.Scripts.Gen
             var offset2 = GetOffsetLine(nextP, currP, nextDistance, 0, p);
             
             var inters = VectorIntersect.GetIntersectionPoint(offset1.Item1, offset1.Item2, offset2.Item1, offset2.Item2);
-            offset1.Item2 = inters.Value;
-            offset2.Item2 = inters.Value;
-            if (draw)
+            if(inters.HasValue)
             {
+                offset1.Item2 = inters.Value;
+                offset2.Item2 = inters.Value;
+                return (offset1, offset2);
+            }
+            else
+            {
+                Debug.LogError("Intersection has no value ;/");
                 DrawPolygon(new List<Vector2> { offset1.Item1, offset1.Item2 }, Color.green);
                 DrawPolygon(new List<Vector2> { offset2.Item1, offset2.Item2 }, Color.blue);
+                return ((Vector2.zero, Vector2.zero), (Vector2.zero, Vector2.zero));
             }
-            return (offset1, offset2);
         }
-
-
-
-        public static List<List<Vector2>> MakeLotsByCuttingEdges(System.Random rnd, List<Vector2> polygon, float depth)
-        {                        
-            var lots = new List<List<Vector2>>();
-            var center = polygon.FindCenter();
-            var longestEdge = polygon.GetLongestEdgeLength();
-           
-            HashSet<(Vector2, Vector2)> usedEdges = new();
-            (Vector2, Vector2) lastEdges = new();
-            while (usedEdges.Count < polygon.Count)
-            {                
-                var (bestP, bestP2) = FindBestEdge(polygon, usedEdges);
-                if (bestP is null || bestP2 is null)
-                {
-                    break;                    
-                }
-                DrawRays(Color.cyan, bestP.Value, bestP2.Value);
-
-                var (offset1, offset2) = GetOffsetLine(bestP.Value, bestP2.Value, rnd.NextFloat(depth - 1, depth + 1), longestEdge, polygon);
-                DrawRays(Color.black, offset1, offset2);
-
-                var intersDict = GetIntersections(polygon, offset1, offset2);
-                if (!intersDict.Keys.Any())
-                {
-                    usedEdges.Add((bestP.Value, bestP2.Value));
-                    continue;
-                }
-                DrawRays(Color.red, intersDict.Values.First(), intersDict.Values.Last());
-
-                //polygon.Add(intersDict.Values.First());
-                //var index1 = polygon.IndexOf(intersDict.Keys.First().Item1);
-                //var index2 = polygon.IndexOf(intersDict.Keys.First().Item2);
-                //var maxIndex = Math.Max(index1, index2);
-                //polygon.Insert(maxIndex, intersDict[intersDict.Keys.First()]);
-
-                //index1 = polygon.IndexOf(intersDict.Keys.Last().Item1);
-                //index2 = polygon.IndexOf(intersDict.Keys.Last().Item2);
-                //var minIndex = Math.Min(index1, index2);
-                //polygon.Insert(minIndex, intersDict[intersDict.Keys.Last()]);
-                polygon.AddRange(intersDict.Values.ToList());
-                polygon = polygon.ReorderPointsByAngleCCW();
-
-                List<Vector2> newLotPts = intersDict.Values.ToList();
-                usedEdges.Add((newLotPts[0], newLotPts[1]));
-                lastEdges = usedEdges.Last();
-                var newLot = SplitPolygon(polygon, usedEdges.Last(), bestP.Value);
-                lots.Add(newLot);
-
-                var notBestP = polygon.First(p => !newLot.Contains(p));
-                polygon = SplitPolygon(polygon, lastEdges, notBestP);
-            }
-            return lots;
-        }
-
         public static void DrawPolygon(List<Vector2> polygon, Color color, Vector2? shift = null, bool drawRays = false)
         {
             Debug.Log($"Polygon points count: {polygon.Count}");
@@ -520,7 +566,6 @@ namespace Assets.Game.Scripts.Gen
             if (drawRays)
                 DrawPolygonRays(polygon, color, shift);
         }        
-
         public static void DrawPolygonRays(List<Vector2> polygon, Color color, Vector2? shift = null)
         {
             var shiftVal = shift ?? Vector2.zero;
@@ -530,7 +575,6 @@ namespace Assets.Game.Scripts.Gen
                 Debug.DrawRay(polygon[i] + shiftVal, Vector3.up * (i + 1), color, 5f);
             }
         }
-
         static void DrawRays(Color color, params Vector2[] pos)
         {
             var index = 1f;
@@ -540,7 +584,6 @@ namespace Assets.Game.Scripts.Gen
                 index += 2;
             }           
         }
-
         public static List<Vector2> SplitPolygon(List<Vector2> polygon, (Vector2, Vector2) offsets, params Vector2[] containedPoints)
         {
             Vector2 i0 = offsets.Item1;
@@ -581,7 +624,6 @@ namespace Assets.Game.Scripts.Gen
                 return polyA;
             else return new List<Vector2>();
         }
-
         public static List<Vector2> MySplitPolygon(List<Vector2> polygon, (Vector2, Vector2) offsets, params Vector2[] containedPoints)
         {
             Vector2 i0 = offsets.Item1;
@@ -615,9 +657,6 @@ namespace Assets.Game.Scripts.Gen
                 return polyB;
             else return polyA;
         }
-
-
-   
         public static Dictionary<(Vector2, Vector2), Vector2> GetIntersections(List<Vector2> polly, Vector2 offset1, Vector2 offset2)
         {
             var result = new Dictionary<(Vector2, Vector2), Vector2>();
@@ -641,7 +680,6 @@ namespace Assets.Game.Scripts.Gen
             }
             return result;
         }
-
         public static (Vector2?, Vector2?) FindBestEdge(List<Vector2> p, HashSet<(Vector2, Vector2)> edges)
         {
             var bestAnglesDict = new KeyValuePair<(Vector2?, Vector2?), float>((null, null), 999);
@@ -665,7 +703,6 @@ namespace Assets.Game.Scripts.Gen
             }
             return bestAnglesDict.Key;
         }
-
         public static (Vector2, Vector2) GetOffsetLine(Vector2 p0, Vector2 p1, float distance, float extendLength, List<Vector2> polygon)
         {
             var polCenter = polygon.FindCenter();
@@ -689,7 +726,6 @@ namespace Assets.Game.Scripts.Gen
 
             return (extendedStart, extendedEnd);
         }
-
         public static List<List<Vector2>> ExtractParallelLotsSmart(List<Vector2> polygon, float lotDepth)
         {
             var lots = new List<List<Vector2>>();
@@ -745,7 +781,6 @@ namespace Assets.Game.Scripts.Gen
 
             return lots;
         }
-
         public static Vector2? IntersectLines(Vector2 a1, Vector2 a2, Vector2 b1, Vector2 b2, float maxDistFromSegment = 3f)
         {
             float x1 = a1.x, y1 = a1.y;
@@ -768,7 +803,6 @@ namespace Assets.Game.Scripts.Gen
 
             return intersection;
         }
-
         List<List<Vector2>> ExtractParallelLots(List<Vector2> cycle, float lotDepth)
         {
             var resultLots = new List<List<Vector2>>();
@@ -807,8 +841,6 @@ namespace Assets.Game.Scripts.Gen
 
             return resultLots;
         }
-
-
         private static List<Vector2> SubtractPolygon(List<Vector2> baseCycle, List<Vector2> parcel)
         {
             var newCycle = new List<Vector2>();
@@ -837,8 +869,6 @@ namespace Assets.Game.Scripts.Gen
 
             return newCycle;
         }
-       
-
         public static bool IsPointOnSegment(Vector2 p, Vector2 a, Vector2 b, float epsilon = 0.01f)
         {
             var ab = b - a;

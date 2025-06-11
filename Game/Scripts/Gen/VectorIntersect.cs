@@ -150,4 +150,35 @@ public class VectorIntersect : MonoBehaviour
 
         return Intersection;
     }
+
+    public static Vector2 GetPerpendicularIntersection(Vector2 start, Vector2 end, Vector2 point)
+    {
+        Vector2 AB = end - start;
+        Vector2 AP = point - start;
+        float t = Vector2.Dot(AP, AB) / Vector2.Dot(AB, AB);
+
+        // Punkt przeciêcia
+        Vector2 H = start + t * AB;
+
+        if (false)// (draw)
+        {
+            Debug.DrawRay(H, Vector2.up * 2f, Color.green, 3f);
+            Debug.DrawLine(start, end, Color.yellow, 3f);
+            Debug.DrawLine(point, H, Color.red, 3f);
+        }
+        return H;
+    }
+
+
+    public static Vector2 ExtendSegment(Vector2 start, Vector2 end, float extensionLength)
+    {
+        Vector2 direction = (end - start).normalized;
+        Vector2 extendedEnd = end + direction * extensionLength;
+        return extendedEnd;
+    }
+
+    internal static float GetAngleBetweenVectors(Vector2 pos1, Vector2 center, Vector2 pos2)
+    {
+        return Vector2.Angle(pos1 - center, pos2 - center);
+    }
 }

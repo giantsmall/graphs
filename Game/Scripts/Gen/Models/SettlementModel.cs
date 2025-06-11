@@ -10,11 +10,11 @@ namespace Assets.Game.Scripts.Gen.Models
 {
     public class SettlementModel: PtWSgmnts
     {
-        internal List<Vector2> roadDirs = new();
         internal Vector2 center => this.pos;
         internal District mainSquare;
         public SettlementModel(PtWSgmnts p) : base(p.pos)
         {            
+            
             base.majorPaths = majorPaths;
             base.neighbourVillages = neighbourVillages;
             base.TriangleNeighbours = TriangleNeighbours;
@@ -63,9 +63,11 @@ namespace Assets.Game.Scripts.Gen.Models
         public List<Street> districtDivStreets { get; protected set; } = new();
         //walls        
         public Wall wall { get; set; } = new Wall();
+        
         public Wall Citadel { get; set; } = new Wall();
         
         public Street innerCircleStreet = new();
+        public Street moatStreet = new();
         //buildings
         public List<BuildingModel> buildings { get; protected set; } = new();
         //greens
@@ -75,6 +77,8 @@ namespace Assets.Game.Scripts.Gen.Models
         public List<PtWSgmnts> InnerCircle { get; internal set; } = new();
         public List<District> InnerDistricts { get; internal set; } = new();
         public List<District> OuterDistricts { get; internal set; } = new();
+
+        public Moat moat { get; set; }
         public List<Block> Blocks { get; internal set; } = new();
         public List<Lot> Lots { get; internal set; } = new();
     }    

@@ -7,11 +7,28 @@ using Assets.Game.Scripts.Utility;
 using UnityEngine.Rendering.VirtualTexturing;
 using System;
 using Assets.Game.Scripts.Gen.GraphGenerator;
+using NUnit.Framework;
+using Assets.Game.Scripts.Editors;
+using Unity.Profiling;
 
 namespace Assets.Game.Scripts.Gen.Models
 {
     public class Polygon
     {
+        static uint Index = 0;
+        public static void ResetCount()
+        {
+            Index = 0;
+        }
+        public uint Id { get; protected set; }
+
+        public Polygon GetDeepClone()
+        {
+            Id = Index++;
+            var newPoly = new Polygon(this.points.Select(p => new PtWSgmnts(p.pos)).ToList());            
+            return newPoly;
+        }
+
         internal Rect GetRectangleCircumscribedInPolygon(float offset = 0f)
         {
             var pts = this.points.OrderBy(p => p.pos.x).ToList();
@@ -26,40 +43,69 @@ namespace Assets.Game.Scripts.Gen.Models
             return new Rect(new Vector2(minX - offset * xSize, minY - offset * ySize), new Vector2(xSize * (1 + 2 * offset), ySize * (1 + 2 * offset)));
         }
         public float Length { get; private set; }
-        public List<PtWSgmnts> points { get; set; } = new ();
+        public List<PtWSgmnts> points { get; set; } = new();
 
         public Polygon()
         {
+            Id = Index++;
+        }
 
+        public Polygon(List<Vector2> points)
+        {
+            Id = Index++;
+            this.points = points.Select(p => new PtWSgmnts(p)).ToList();
         }
 
         public Polygon(List<PtWSgmnts> points)
         {
+            Id = Index++;
             this.points = points;
         }
 
         public Polygon(params List<PtWSgmnts>[] pointArrays)
         {
+            Id = Index++;
             var many = pointArrays.SelectMany(p => p).ToList();
             this.points = many.Distinct(new PointsComparer(true)).ToList();
         }
 
-
+        public List<LineSegment> CreateEdges()
+        {
+            var lines = new List<LineSegment>();
+            for (int i = 0; i < this.points.Count; i++)
+            {
+                var p = this.points[i];
+                var nextP = this.points.Neighbour(i, 1);
+                lines.Add(new LineSegment(p, nextP));
+            }
+            return lines;
+        }
 
         public Polygon(params PtWSgmnts[] points)
         {
+            Id = Index++;
             this.points = points.ToList();
         }
 
         public Polygon(params Vector2[] vertices)
         {
+            Id = Index++;
             this.points = vertices.Select(v => new PtWSgmnts(v)).ToList();
         }
 
-
+        public bool ContainsSomeEdge(LineSegment edge)
+        {
+            return this.ContainsPoint(edge.p0) || this.ContainsPoint(edge.p1);
+        }
         public void ReorderPointsByAngleCCW()
         {
             this.points.Select(p => p.pos).ToList().ReorderPointsByAngleCCW();
+        }
+
+        public bool ContainsCheckpointPos(PtWSgmnts point, float epsilon = 1f)
+        {
+            var pt = points.Where(p => (p.pos - point.pos).magnitude < epsilon).FirstOrDefault();
+            return pt != null;
         }
 
         public bool ContainsCheckpoint(PtWSgmnts point)
@@ -69,7 +115,7 @@ namespace Assets.Game.Scripts.Gen.Models
         }
         public bool ContainsCheckpoints(params PtWSgmnts[] points)
         {
-            foreach(var point in points)
+            foreach (var point in points)
             {
                 var result = this.ContainsCheckpoint(point);
                 if (!result)
@@ -97,15 +143,15 @@ namespace Assets.Game.Scripts.Gen.Models
             for (int i = 0; i < loopedPts.Count - 1; i++)
             {
                 len += loopedPts[i].DistanceTo(loopedPts[i + 1]);
-            }            
+            }
             return len;
         }
 
         internal List<PtWSgmnts> GetOverlappingPoints(Polygon polygon)
         {
-            var allContainedPoints = polygon.points.Where(p => this.ContainsPoint(p) && !this.points.Contains(p)).ToList();            
+            var allContainedPoints = polygon.points.Where(p => this.ContainsPoint(p) && !this.points.Contains(p)).ToList();
             var pointsInsidePolygon = allContainedPoints.ToList();
-            foreach(var pt in allContainedPoints)
+            foreach (var pt in allContainedPoints)
             {
                 for (int i = 0; i < this.points.Count - 1; i++)
                 {
@@ -132,12 +178,12 @@ namespace Assets.Game.Scripts.Gen.Models
         public List<PtWSgmnts> GetPoints(List<PtWSgmnts> points, bool inside)
         {
             var start = 0;
-            var end = points.Count - 1;            
+            var end = points.Count - 1;
             var middle = start.GetMiddleNumber(end);
             var middleInside = this.ContainsPoint(points[middle]);
             var nextInside = this.ContainsPoint(points[middle + 1]);
             do
-            {                
+            {
                 if (middleInside)
                 {
                     start = middle;
@@ -177,11 +223,11 @@ namespace Assets.Game.Scripts.Gen.Models
             var shiftV0 = s.p0.pos + new Vector2(distance, 0);
 
             var angle = Vector2.Angle(s.p1.pos - s.p0.pos, s.p1.pos - shiftV0);
-            
+
             shiftV0 = shiftV0.RotateAroundPivot(s.p0.pos, 90 - angle);
             shiftV1 = shiftV1.RotateAroundPivot(s.p1.pos, 90 - angle);
             if (shiftV0.DistanceTo(dir) > s.p0.pos.DistanceTo(dir))
-            { 
+            {
                 shiftV1 = shiftV1.RotateAroundPivot(s.p1.pos, -90 + angle);
                 shiftV0 = shiftV0.RotateAroundPivot(s.p0.pos, -90 + angle);
             }
@@ -211,11 +257,31 @@ namespace Assets.Game.Scripts.Gen.Models
             return Math.Abs(pt.x - x) < epsilon || Math.Abs(pt.y - y) < epsilon;
         }
 
-        public bool ContainsPoint(PtWSgmnts p)        
+        public bool ContainsPoint(PtWSgmnts p)
         {
             if (this.ContainsCheckpoint(p))
                 return true;
+            return this.ContainsPoint(p.pos);
+        }
 
+        public int NumberOfPolygonsOverlapping(List<Polygon> p)
+        {
+
+            return 0;
+            //for (int i = 0; i < this.points.Count; i++)
+            //{
+            //    var pi = this.points[i];
+            //    var nextP = this.points.Neighbour(i, 1);
+
+            //    if (ParcelGenerator.IsPointOnSegment(p.pos, pi.pos, nextP.pos))
+            //        return true;
+            //}
+            //return false;
+        }
+
+
+        public bool ContainsPoint(Vector2 p)
+        {
             var poly = points.Select(p => p.pos).ToArray();
             Vector2 p1, p2;
             bool inside = false;
@@ -242,9 +308,9 @@ namespace Assets.Game.Scripts.Gen.Models
                     p2 = oldPoint;
                 }
 
-                if ((newPoint.x < p.pos.x) == (p.pos.x <= oldPoint.x)
-                    && (p.pos.y - p1.y) * (p2.x - p1.x)
-                    < (p2.y - p1.y) * (p.pos.x - p1.x))
+                if ((newPoint.x < p.x) == (p.x <= oldPoint.x)
+                    && (p.y - p1.y) * (p2.x - p1.x)
+                    < (p2.y - p1.y) * (p.x - p1.x))
                 {
                     inside = !inside;
                 }
@@ -289,16 +355,16 @@ namespace Assets.Game.Scripts.Gen.Models
                 {
                     minInd1 = tmp;
                 }
-                
+
             }
             else if (rnd.NextBool(.3f))
-            {                
+            {
                 var tmp = minInd2.WrapIndex(rnd.Next(-1, 2), points);
                 if (points[tmp].DistanceTo(points[minInd1]) <= 1.6 * points[minInd1].DistanceTo(points[minInd2]))
                 {
                     minInd2 = tmp;
                 }
-            }           
+            }
 
             return (points[minInd1], points[minInd2]);
         }
@@ -439,7 +505,7 @@ namespace Assets.Game.Scripts.Gen.Models
             }
         }
 
-        
+
 
         public float CalculateLength()
         {
@@ -496,8 +562,6 @@ namespace Assets.Game.Scripts.Gen.Models
             }
         }
 
-        
-
         internal List<PtWSgmnts> LoopedCheckPoints()
         {
             var list = points.ToList();
@@ -506,13 +570,210 @@ namespace Assets.Game.Scripts.Gen.Models
             return list;
         }
 
-        
-
         internal float GetFirstCheckPointsAngle(Polygon pol)
         {
             return Vector2.Angle(points[1].pos - points[0].pos, pol.points[1].pos - pol.points[0].pos);
         }
 
-        
+        internal List<float> GetEdgeDistancesToCenter()
+        {
+            var center = this.FindCenter();
+            var list = new List<float>();
+            for (int i = 0; i < this.points.Count; i++)
+            {
+                list.Add(points[i].DistanceTo(center));
+            }
+            return list;
+        }
+
+        internal List<float> GetEdgeLengths()
+        {
+            var list = new List<float>();
+            for (int i = 0; i < this.points.Count; i++)
+            {
+                list.Add(points[i].DistanceTo(points.Neighbour(i, 1)));
+            }
+            return list;
+        }
+
+        public int GetEdgeLength(float len)
+        {
+            for (int i = 0; i < this.points.Count; i++)
+            {
+                if (points[i].DistanceTo(points.Neighbour(i, 1)) == len)
+                    return i;
+            }
+            return -1;
+        }
+
+        internal float GetHeightOfEdge(int edgeLenIndex)
+        {
+            var vert1 = points[edgeLenIndex].pos;
+            var vert2 = points.Neighbour(edgeLenIndex, 1).pos;
+            var heightEdge = points.Neighbour(edgeLenIndex, -1).pos;
+            if (this.points.Count == 3)
+            {
+                return ParcelGenerator.PerpendicularDistance(vert1, vert2, heightEdge);
+            }
+            else
+            {
+                Debug.LogWarning($"Works only for triangle, number of verts = {points.Count}");
+                return ParcelGenerator.PerpendicularDistance(vert1, vert2, heightEdge);
+            }
+        }
+
+        internal LineSegment GetshortestEdge()
+        {
+            var list = new List<float>();
+            for (int i = 0; i < this.points.Count; i++)
+            {
+                list.Add(points[i].DistanceTo(points.Neighbour(i, 1)));
+            }
+
+            var minIndex = list.IndexOf(list.Where(v => v > 0).Min());
+            return new LineSegment(points[minIndex], points.Neighbour(minIndex, 1));
+        }
+
+        internal bool PointsAreOnEdge(PtWSgmnts p0, PtWSgmnts p1)
+        {
+            var p1OnSegment = false;
+            var p2OnSegment = false;
+            for (int i = 0; i < this.points.Count; i++)
+            {
+                var pi = this.points[i];
+                var pNext = this.points.Neighbour(i, 1);
+                if(!p1OnSegment)
+                    p1OnSegment = p1OnSegment || ParcelGenerator.IsPointOnSegment(p0.pos, pi.pos, pNext.pos);
+                if(!p2OnSegment)
+                    p2OnSegment = p2OnSegment || ParcelGenerator.IsPointOnSegment(p1.pos, pi.pos, pNext.pos);
+                if(p1OnSegment && p2OnSegment)
+                    return true;
+            }
+            return false;
+        }
+
+        internal bool PointOnEdge(PtWSgmnts p0)
+        {
+            var p1OnSegment = false;
+            for (int i = 0; i < this.points.Count; i++)
+            {
+                var pi = this.points[i];
+                var pNext = this.points.Neighbour(i, 1);
+                if (!p1OnSegment)
+                    p1OnSegment = p1OnSegment || ParcelGenerator.IsPointOnSegment(p0.pos, pi.pos, pNext.pos);
+                if (p1OnSegment)
+                    return true;
+            }
+            return false;
+        }
+
+        internal List<float> GetInnerAngles()
+        {
+            var angles = new List<float>();
+            for (int i = 0; i < this.points.Count; i++)
+            {
+                var pI = this.points[i];
+                var prevP = this.points.Neighbour(i, -1);
+                var nextP = this.points.Neighbour(i, 1);
+                var angle = Vector2.SignedAngle(pI.pos - prevP.pos, pI.pos - nextP.pos);
+                angles.Add(Mathf.Round(angle));
+            }
+            return angles;
+        }
+
+        internal void RemovePointWithSamePos()
+        {
+            int count = 0;
+            for (int i = 0; i < this.points.Count; i++)
+            {
+                var p = this.points[i];
+                var nextP = this.points.Neighbour(i, 1);
+                if((p.pos - nextP.pos).magnitude < float.Epsilon)
+                {
+                    this.points.RemoveAt(i);
+                    count++;
+                    i--;
+                }
+            }
+            if(count > 0)
+                Debug.LogWarning($"{count} duplicates removed from polyon");
+            return;
+            var ptsWithSamePos = this.points.GroupBy(p => p.pos).Where(g => g.Count() > 1).SelectMany(g => g.Skip(1)).ToList();
+            if (ptsWithSamePos.Count > 0)
+            {
+                Debug.DrawRay(ptsWithSamePos[0].pos, Vector2.up * ptsWithSamePos.Count, Color.red);
+                count = ptsWithSamePos.Count;                
+                this.points = this.points.Except(ptsWithSamePos).ToList();
+                Debug.LogWarning($"Duplicates found. {count}. Number left after removal: {ptsWithSamePos.Count}");
+            }
+        }
+
+        internal void RemovePointWByPos(PtWSgmnts p0)
+        {
+            var ptsWithP0Pos = this.points.Where(p => p.pos == p0.pos).ToList();
+            if(ptsWithP0Pos.Count > 1)
+            {
+                Debug.LogWarning("More than one point of same pos found.");
+            }
+            this.points = this.points.Except(ptsWithP0Pos).ToList();
+        }
+
+        internal void UpdatePointPosByPos(PtWSgmnts currP, Vector2 newPos)
+        {
+            var ptsWithP0Pos = this.points.Where(p => p.pos == currP.pos).ToList();
+            if (ptsWithP0Pos.Count > 1)
+            {
+                Debug.LogWarning($"More than one point of same pos found. {ptsWithP0Pos.Count}");
+                
+            }
+            foreach(var pt in ptsWithP0Pos)
+            {
+                pt.pos = newPos;
+            }
+        }
+
+        internal bool PosOnPolygonEdge(params PtWSgmnts[] pts)
+        {
+            foreach(var p in pts)
+            {
+                for (int i = 0; i < this.points.Count; i++)
+                {
+                    var pi = this.points[i];
+                    var pNext = this.points.Neighbour(i, 1);
+                    if (ParcelGenerator.IsPointOnSegment(p.pos, pi.pos, pNext.pos))
+                        return true;
+                }
+            }
+            return false;
+        }
+
+        internal List<PtWSgmnts> GetNeighgboursPtCloserTo(PtWSgmnts neighbourTo, Vector2 destination)
+        {
+            var result = new List<PtWSgmnts>();
+            float resultDist = float.MaxValue;
+            float neighDist = float.MaxValue;
+
+            do
+            {
+                var neighIndes = this.points.IndexOf(neighbourTo);
+                var prev = this.points.Neighbour(neighIndes, -1);
+                var next = this.points.Neighbour(neighIndes, 1);
+                var prevDist = prev.DistanceTo(destination);
+                var nextDist = next.DistanceTo(destination);
+                neighDist = neighbourTo.DistanceTo(destination);
+
+                var resultPt = next;
+                resultDist = nextDist;
+                if (prevDist < nextDist)
+                {
+                    resultPt = prev;
+                    resultDist = prevDist;
+                }
+                result.Add(resultPt);
+                neighbourTo = resultPt;
+            }
+            while (resultDist < neighDist);
+            return result;
+        }
     }
 }

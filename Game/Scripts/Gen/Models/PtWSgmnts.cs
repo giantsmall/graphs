@@ -211,7 +211,17 @@ namespace Assets.Game.Scripts.Gen.Models
             var distance = 2 * Mathf.Sqrt(s * (s - a) * (s - b) * (s - c)) / a;
             return distance;
         }
-    }
+
+        internal void AbsorbNeighbour(PtWSgmnts pToAbsorb)
+        {
+            this.AddNeighbours(pToAbsorb.Neighbours);
+            foreach (var n in pToAbsorb.Neighbours)
+            {
+                n.AddNeighbours(this);
+                n.Neighbours.Remove(pToAbsorb);
+            }            
+        }
+}
 
     public class PointsComparer : EqualityComparer<PtWSgmnts>
     {

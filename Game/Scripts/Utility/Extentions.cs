@@ -12,6 +12,13 @@ namespace Assets.Game.Scripts.Utility
 {
     internal static class Extentions
     {
+        public static void ShiftBy(this List<Vector2> list, Vector2 shift)
+        {
+            for (int i = 0; i < list.Count; i++)
+            {
+                list[i] += shift;
+            }
+        }
         public static bool IsValid(this Vector2 vector) => float.IsNaN(vector.x) || float.IsNaN(vector.y) || float.IsInfinity(vector.x) || float.IsInfinity(vector.y);
 
         public static float GenNormalDist(this System.Random rnd, float min = 0, float max = 1)
@@ -579,6 +586,16 @@ namespace Assets.Game.Scripts.Utility
                 list[i] = temp;
             }
             return list;
+        }
+
+        public static Vector2 FindCenter(this List<PtWSgmnts> points)
+        {
+            Vector2 pos = Vector2.zero;
+            foreach (var p in points)
+            {
+                pos += p.pos;
+            }
+            return pos / points.Count;
         }
 
         public static Vector2 FindCenter(this List<Vector2> points)

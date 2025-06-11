@@ -1,0 +1,4 @@
+1. Block edge crosses district border
+2. Angle lot points sometimes exceeds block or overlaps another lot
+3. too short edges
+4. Sometimes verices are on 0,0 stretching edges...

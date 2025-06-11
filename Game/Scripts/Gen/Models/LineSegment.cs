@@ -18,6 +18,8 @@ namespace Assets.Game.Scripts.Gen.Models
         static int instanceIndex = 0;
         public int Id { get; private set; } = -1;
         public bool Draw = true;
+        public float thickness { get; protected set; }
+
         public List<PtWSgmnts> CptsNoEdges => points.Where(c => points.IndexOf(c) > 0 && points.IndexOf(c) < points.Count - 1).ToList();
 
         public PtWSgmnts p0
@@ -114,6 +116,11 @@ namespace Assets.Game.Scripts.Gen.Models
             ValidateNeighbours();
         }
 
+        public LineSegment(List<PtWSgmnts> points, float thickness) : base(points)
+        {
+            this.thickness = thickness;
+        }
+
         public static int CompareLengths_MAX (LineSegment segment0, LineSegment segment1)
 		{
 			float length0 = Vector2.Distance (segment0.p0.pos, segment0.p1.pos);
@@ -196,13 +203,18 @@ namespace Assets.Game.Scripts.Gen.Models
         }
 
         public void ExtendIfBelow(float minLength)
+        {            
+            ExtendIfBelow(minLength, this.Length - minLength);
+        }
+
+        public void ExtendIfBelow(float minLength, float missingLength)
         {
             if (this.Length < minLength)
             {
-                var missingLength = minLength - this.Length;
                 var middlePoint = Vector2.Lerp(p0.pos, p1.pos, 0.5f);
-                this.p1.pos += (this.p1.pos - middlePoint) * missingLength;
-                this.p0.pos -= (middlePoint - this.p0.pos) * missingLength;
+                var lenToCenter = middlePoint.DistanceTo(this.p1.pos);
+                this.p0.pos += (middlePoint - this.p0.pos) * (1 + missingLength / lenToCenter);
+                this.p1.pos += (middlePoint - this.p1.pos) * (1 + missingLength / lenToCenter);
                 this.CalculateLength();
             }
         }
@@ -448,16 +460,13 @@ namespace Assets.Game.Scripts.Gen.Models
             }
             return this;
         }
-        internal int ReplaceEdgePointWithSamePos(LineSegment line)
+        internal int ReplaceEdgePointWithSamePos(LineSegment line, List<LineSegment> allEdges)
         {
             int count = 0;
             var ptToReplace = this.p1;
             if (PosMatchButNotId(p0, line.p0))
             {
-                ptToReplace = line.p0;
-                //line.p0.AddNeighbours(this.p0.Neighbours);
-                //this.p0 = line.p0;
-                //count++;
+                ptToReplace = this.p0;
             }
             line.p0.AddNeighbours(ptToReplace.Neighbours);
             ptToReplace = line.p0;
@@ -483,14 +492,12 @@ namespace Assets.Game.Scripts.Gen.Models
             if (PosMatchButNotId(p0, line.p0))
             {
                 line.p0.AddNeighbours(this.p0.Neighbours);
-                //line.p0.Neighbours = line.p0.Neighbours.Distinct(new PointsComparer(true)).ToList();
                 this.p0 = line.p0;
                 count++;
             }
             else if (PosMatchButNotId(p1, line.p0))
             {
                 line.p0.AddNeighbours(this.p1.Neighbours);
-                //line.p0.Neighbours = line.p0.Neighbours.Distinct(new PointsComparer(true)).ToList();
                 this.p1 = line.p0;
                 count++;
             }
@@ -498,20 +505,18 @@ namespace Assets.Game.Scripts.Gen.Models
             if (PosMatchButNotId(p0, line.p1))
             {
                 line.p1.AddNeighbours(this.p0.Neighbours);
-                //line.p1.Neighbours = line.p1.Neighbours.Distinct(new PointsComparer(true)).ToList();
                 this.p0 = line.p1;
                 count++;
             }
             else if (PosMatchButNotId(p1, line.p1))
             {
                 line.p1.AddNeighbours(this.p1.Neighbours);
-                //line.p1.Neighbours = line.p1.Neighbours.Distinct(new PointsComparer(true)).ToList();
                 this.p1 = line.p1;
                 count++;
             }
             if (count > 1)
             {
-                Debug.LogWarning($"!!Replaced {count} points!!!");
+                Debug.Log($"Replaced {count} points.");
             }
             return count;
         }
@@ -537,6 +542,11 @@ namespace Assets.Game.Scripts.Gen.Models
 
     public class SegmentComparer : EqualityComparer<LineSegment>
     {
+        protected bool pIdMatters = false;
+        public SegmentComparer(bool pointIdMatters = false)
+        {
+            pIdMatters = pointIdMatters;
+        }
         public static bool SameId(LineSegment s1, LineSegment s2)
         {
             var result = /*PointsComparer.SameCoords(s1.p1, s2.p1) && PointsComparer.SameCoords(s1.p0, s2.p0) &&*/ s1.Id == s2.Id;
@@ -548,10 +558,17 @@ namespace Assets.Game.Scripts.Gen.Models
             var result = PointsComparer.SameCoords(s1.p1, s2.p1) && PointsComparer.SameCoords(s1.p0, s2.p0);
             return result;
         }
+        public static bool SamePointId(LineSegment s1, LineSegment s2)
+        {
+            var result = s1.EdgeIds.Contains(s2.EdgeIds[0]) && s1.EdgeIds.Contains(s2.EdgeIds[1]);
+            return result;
+        }
 
         public override bool Equals(LineSegment s1, LineSegment s2)
         {
-            return SameId(s1, s2);
+            if (pIdMatters)
+                return SamePointId(s1, s2);
+            else return SameId(s1, s2);
         }
 
         public override int GetHashCode(LineSegment s)
