@@ -108,6 +108,12 @@ namespace Assets.Game.Scripts.Gen.Models
             return pt != null;
         }
 
+        public List<PtWSgmnts> GetCheckpointsByPos(PtWSgmnts point, float epsilon = 1f)
+        {
+            var pts = points.Where(p => (p.pos - point.pos).magnitude < epsilon).ToList();
+            return pts;
+        }
+
         public bool ContainsCheckpoint(PtWSgmnts point)
         {
             var pt = points.Where(p => p.Id == point.Id).FirstOrDefault();
@@ -675,7 +681,8 @@ namespace Assets.Game.Scripts.Gen.Models
                 var pI = this.points[i];
                 var prevP = this.points.Neighbour(i, -1);
                 var nextP = this.points.Neighbour(i, 1);
-                var angle = Vector2.SignedAngle(pI.pos - prevP.pos, pI.pos - nextP.pos);
+                var angle = VectorIntersect.GetAngleBetweenVectors(prevP.pos, pI.pos, nextP.pos);
+                var angle2 = Vector2.SignedAngle(pI.pos - prevP.pos, pI.pos - nextP.pos);
                 angles.Add(Mathf.Round(angle));
             }
             return angles;
@@ -718,7 +725,7 @@ namespace Assets.Game.Scripts.Gen.Models
             this.points = this.points.Except(ptsWithP0Pos).ToList();
         }
 
-        internal void UpdatePointPosByPos(PtWSgmnts currP, Vector2 newPos)
+        internal int UpdatePointPosByPos(PtWSgmnts currP, Vector2 newPos)
         {
             var ptsWithP0Pos = this.points.Where(p => p.pos == currP.pos).ToList();
             if (ptsWithP0Pos.Count > 1)
@@ -730,6 +737,7 @@ namespace Assets.Game.Scripts.Gen.Models
             {
                 pt.pos = newPos;
             }
+            return ptsWithP0Pos.Any()? 1 : 0;
         }
 
         internal bool PosOnPolygonEdge(params PtWSgmnts[] pts)
@@ -750,7 +758,7 @@ namespace Assets.Game.Scripts.Gen.Models
         internal List<PtWSgmnts> GetNeighgboursPtCloserTo(PtWSgmnts neighbourTo, Vector2 destination)
         {
             var result = new List<PtWSgmnts>();
-            float resultDist = float.MaxValue;
+            float resultDist = float.MinValue;
             float neighDist = float.MaxValue;
 
             do
@@ -769,7 +777,8 @@ namespace Assets.Game.Scripts.Gen.Models
                     resultPt = prev;
                     resultDist = prevDist;
                 }
-                result.Add(resultPt);
+                if(resultDist < neighDist)
+                    result.Add(resultPt);
                 neighbourTo = resultPt;
             }
             while (resultDist < neighDist);

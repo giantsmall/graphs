@@ -179,6 +179,6 @@ public class VectorIntersect : MonoBehaviour
 
     internal static float GetAngleBetweenVectors(Vector2 pos1, Vector2 center, Vector2 pos2)
     {
-        return Vector2.Angle(pos1 - center, pos2 - center);
+        return Vector2.SignedAngle(center - pos1, center - pos2);
     }
 }
