@@ -381,20 +381,20 @@ public class VoronoiDemo : MonoBehaviour
                     var angle = Vector2.Angle(shortestPath.p1.pos - shortestPath.p0.pos, village.pos - city.pos);
                     if(angle < Mathf.Abs(30f) && !shortestPath.HasConnectionWithCity)
                     {
-                        var closestCheckPoint = shortestPath.points.OrderBy(p => p.DistanceTo(city)).First();
-                        var indexOfShortest = shortestPath.points.IndexOf(closestCheckPoint);
-                        if (indexOfShortest == 0 || indexOfShortest == shortestPath.points.Count - 1)
+                        var closestCheckPoint = shortestPath.Points.OrderBy(p => p.DistanceTo(city)).First();
+                        var indexOfShortest = shortestPath.Points.IndexOf(closestCheckPoint);
+                        if (indexOfShortest == 0 || indexOfShortest == shortestPath.Count - 1)
                         {
                             Debug.LogWarning("Closest point is edge point");
                             continue;
                         }
-                        shortestPath.points[indexOfShortest] = city;
-                        var segmentsToCity = shortestPath.points.TakeRangeBetween(city, village);
+                        shortestPath[indexOfShortest] = city;
+                        var segmentsToCity = shortestPath.Points.TakeRangeBetween(city, village);
                         var newPath = new LineSegment(segmentsToCity, false);
                         village.MakeMajor(newPath);
                         newPath.HasConnectionWithCity = true;
                         var theOtherVillage = shortestPath.TheOtherPoint(village);                        
-                        var segmentsToTheOtherVillage = shortestPath.points.TakeRangeBetween(theOtherVillage, city);
+                        var segmentsToTheOtherVillage = shortestPath.Points.TakeRangeBetween(theOtherVillage, city);
                         var remainingPath = new LineSegment(segmentsToTheOtherVillage, false);
                         
                         theOtherVillage.MakeMajor(remainingPath);
@@ -452,11 +452,11 @@ public class VoronoiDemo : MonoBehaviour
         foreach (var mainPath in mainPaths)
         {
             var maxDist = Mathf.Min(mainPath.Length / 2f, minCitiesDistance);
-            var villageCount = mainPath.points.Count + 1;
+            var villageCount = mainPath.Count + 1;
             var pathVillages = new List<PtWSgmnts>();
             for (int i = 0; i < villageCount; i++)
             {
-                var currPoint = mainPath.points.GetRandom(rnd);
+                var currPoint = mainPath.Points.GetRandom(rnd);
                 var dist = rnd.NextFloat() * minDist * 2 + minDist;
                 if(mainPath.EdgePoints.Contains(currPoint))
                 {
@@ -483,7 +483,7 @@ public class VoronoiDemo : MonoBehaviour
 
             for (int i = 0; i < pathVillages.Count; i++)
             {
-                var closestCheckPoint = mainPath.points.OrderBy(p => Vector2.Distance(p.pos, pathVillages[i].pos)).First();
+                var closestCheckPoint = mainPath.Points.OrderBy(p => Vector2.Distance(p.pos, pathVillages[i].pos)).First();
                 var closestVillage = pathVillages.OrderBy(p => Vector2.Distance(p.pos, pathVillages[i].pos)).First(v => v.Id != pathVillages[i].Id);
 
                 LineSegment newPath = null;
@@ -951,10 +951,10 @@ public class VoronoiDemo : MonoBehaviour
             for (int i = 0; i < villageSpanningTree.Count; i++)
             {
                 LineSegment seg = villageSpanningTree[i];
-                for (int j = 0; j < seg.points.Count - 1; j++)
+                for (int j = 0; j < seg.Count - 1; j++)
                 {
-                    Vector2 left = (Vector2)seg.points[j].pos;
-                    Vector2 right = (Vector2)seg.points[j + 1].pos;
+                    Vector2 left = (Vector2)seg[j].pos;
+                    Vector2 right = (Vector2)seg[j + 1].pos;
                     Gizmos.DrawLine(left + globalShift, right + globalShift);
                 }
 
@@ -980,18 +980,18 @@ public class VoronoiDemo : MonoBehaviour
                 Gizmos.color = Color.green;
                 foreach (var segment in points[i].majorPaths)
                 {
-                    for (int j = 0; j < segment.points.Count - 1; j++)
+                    for (int j = 0; j < segment.Count - 1; j++)
                     {
-                        Gizmos.DrawLine(segment.points[j].pos + globalShift, segment.points[j + 1].pos + globalShift);
+                        Gizmos.DrawLine(segment[j].pos + globalShift, segment[j + 1].pos + globalShift);
                     }
                 }
 
                 Gizmos.color = Color.white;
                 foreach (var segment in points[i].minorPaths)
                 {
-                    for (int j = 0; j < segment.points.Count - 1; j++)
+                    for (int j = 0; j < segment.Count - 1; j++)
                     {
-                        Gizmos.DrawLine(segment.points[j].pos + globalShift, segment.points[j + 1].pos + globalShift);
+                        Gizmos.DrawLine(segment[j].pos + globalShift, segment[j + 1].pos + globalShift);
                     }
                 }
             }
@@ -1003,9 +1003,9 @@ public class VoronoiDemo : MonoBehaviour
                 {
                     foreach (var villagePath in village.majorPaths)
                     {
-                        for (int c = 0; c < villagePath.points.Count - 1; c++)
+                        for (int c = 0; c < villagePath.Count - 1; c++)
                         {
-                            Gizmos.DrawLine(villagePath.points[c].pos + globalShift, villagePath.points[c + 1].pos + globalShift);
+                            Gizmos.DrawLine(villagePath[c].pos + globalShift, villagePath[c + 1].pos + globalShift);
                         }
                     }
                 }

@@ -51,7 +51,7 @@ namespace Assets.Game.Scripts.Gen.Models
         public void RefreshPtsFromRoads(bool FirstForlastRoad = true)
         {
             var r1InnPts = bStr[0].GetPointsUntilInnerCircle();
-            var InnCirPts = bStr[1].points.TakeLesserRangeWrapped(bStr[0].InnerCircleInters, bStr[2].InnerCircleInters, false);
+            var InnCirPts = bStr[1].Points.TakeLesserRangeWrapped(bStr[0].InnerCircleInters, bStr[2].InnerCircleInters, false);
             var r2InnPts = bStr[2].GetPointsUntilInnerCircle(FirstForlastRoad).Reversed();
 
             var pointArrays = new List<PtWSgmnts>[] { r1InnPts, InnCirPts, r2InnPts };
@@ -74,7 +74,7 @@ namespace Assets.Game.Scripts.Gen.Models
             var list = new List<Street>();
             for (int i = bStr.Count - 1; i >= 0; i--)
             {
-                if (!bStr[i].points.Any(bsp => this.points.Contains(bsp)))
+                if (!bStr[i].Points.Any(bsp => this.points.Contains(bsp)))
                 {
                     list.Add(bStr[i]);
                 }
@@ -84,7 +84,7 @@ namespace Assets.Game.Scripts.Gen.Models
 
         List<PtWSgmnts> SplitSegment(PtWSgmnts p1, PtWSgmnts p2, float min = .8f, float max = 1f)
         {
-            var rnd = RoadGraphGenChaos.GetRandom();
+            var rnd = RoadGraphGenChaosByPos.GetRandom();
             var middlePoints = new List<PtWSgmnts>();
             var tooBig = Vector2.Distance(p1.pos, p2.pos) > max;
             var tooShort = Vector2.Distance(p1.pos, p2.pos) < min;
@@ -106,7 +106,7 @@ namespace Assets.Game.Scripts.Gen.Models
 
         public void SplitIntoBlocksWithinInnerCircle(SettlementModel s, float maxBlockSize)
         {
-            var rnd = RoadGraphGenChaos.GetRandom();
+            var rnd = RoadGraphGenChaosByPos.GetRandom();
             this.Blocks = new List<Block>();
             var block = new Block(this.bStr, this, this.points);
             if (this.CalculateArea() > maxBlockSize)
@@ -137,7 +137,7 @@ namespace Assets.Game.Scripts.Gen.Models
         internal List<Vector2> GetRandomPointsInside(int ptCount = 4)
         {
             var distFactor = 1f;
-            var rnd = RoadGraphGenChaos.GetRandom();
+            var rnd = RoadGraphGenChaosByPos.GetRandom();
             var list = new List<Vector2>();
             var center = this.FindCenter();
             var edgePts = this.points.Where(p => p.IntersectsWIthMainRoad).OrderByDescending(p => this.points.IndexOf(p)).ToList();

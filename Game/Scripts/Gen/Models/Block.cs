@@ -26,7 +26,7 @@ namespace Assets.Game.Scripts.Gen.Models
 
         public PtWSgmnts FindNearestPointOnStreet(LineSegment segment, Vector2 point)
         {
-            return segment.points.OrderBy(p => p.DistanceTo(point)).First();
+            return segment.Points.OrderBy(p => p.DistanceTo(point)).First();
         }
 
         public Vector2 FindNearestPointOnLine(Vector2 origin, Vector2 direction, Vector2 point)
@@ -67,7 +67,7 @@ namespace Assets.Game.Scripts.Gen.Models
                 {
                     if(i != j)
                     {
-                        var pts = streets[i].points.Where(p => streets[j].points.Contains(p));
+                        var pts = streets[i].Points.Where(p => streets[j].Points.Contains(p));
                         mutualPoints.AddRange(pts);
                     }
                 }
@@ -102,7 +102,7 @@ namespace Assets.Game.Scripts.Gen.Models
             for (int i = 0; i < this.streets.Count; i++)
             {
                 var street = this.streets[i];
-                var dev = street.points.TakeMiddleOne().DistanceToSegment(street);
+                var dev = street.Points.TakeMiddleOne().DistanceToSegment(street);
                 if(dev < minDev)
                 {
                     minDev = dev;
@@ -119,7 +119,7 @@ namespace Assets.Game.Scripts.Gen.Models
             for (int i = 0; i < this.streets.Count; i++)
             {
                 var street = this.streets[i];
-                var dev = street.points.TakeMiddleOne().DistanceToSegment(street);
+                var dev = street.Points.TakeMiddleOne().DistanceToSegment(street);
                 if (dev > max)
                 {
                     max = dev;
@@ -127,106 +127,6 @@ namespace Assets.Game.Scripts.Gen.Models
                 }
             }
             return streets[index];
-        }
-
-        public void DesignateLots(SettlementModel s)
-        {
-            if(streets.Count < 3)
-            {
-                Debug.LogWarning("Not enough roads to build lots");
-                return;
-            }
-            if (this.lots.Any())
-            {
-                return;
-            }
-
-            var rnd = RoadGraphGenChaos.GetRandom();
-            var center = new PtWSgmnts(this.FindCenter());
-
-            var lotsSizes = this.points.Count.DivideIntoSizes(2, 3, rnd);
-            var edgePoints = FindIntersections(); //FindEdgePoints(135);
-
-            //first lot
-            var total = 0;
-            var perpPts = new List<PtWSgmnts>();
-            var ptsCloser = GetPointsCloserToCenter(.5f);
-            //foreach (var size in lotsSizes)
-            for(int i = 0; i < lotsSizes.Count; i++)
-            {
-                var size = lotsSizes[i];
-                var lot = new Lot(this);
-                lot.points.AddRange(this.points.GetRange(total, size + 1));
-                lot.AssignStreets(streets);
-
-                //var lastIndex = this.points.IndexOf(lot.points.Last());
-
-                //if (edgePoints.Contains(lot.points.Last()))
-                //{
-                //    lot.points.AddRange(this.points.GetRange(lastIndex + 1, 1));
-                //    lot.points.AddRange(ptsCloser.GetRange(lastIndex + 1, 1).Reversed());
-                //}
-                //lot.points.Add(ptsCloser[total + size + 1]);
-                //lot.points.Add(ptsCloser[total]);
-                total += size;
-
-                if (edgePoints.Contains(lot.points.Last()))
-                {
-                    total++;
-                    lotsSizes[lotsSizes.Count - 1]--;
-                }
-               
-                this.lots.Add(lot);
-            }
-
-            var freePts = this.points.Count - total;
-            if (true || edgePoints.Contains(this.lots[0].points[0]))
-            {
-                if (freePts > 0)
-                {
-                    this.lots[0].points.InsertRange(0, this.points.TakeLast(freePts).ToList());
-                }
-                else
-                {
-                    this.lots[0].AbsorbPolygon(this.lots.Last());
-                }
-            }
-
-            var lastPoints = this.lots.Select(l => l.points.Last()).ToList();
-
-            this.lots = lots.Where(l => l.points.Any()).ToList();
-            foreach (var lot in this.lots)
-            {
-                lot.points.Add(center);
-            }
-            s.Lots.AddRange(lots);
-            return;
-
-
-            foreach (var lot in this.lots)
-            {
-                break;
-                if (lot.streets.Count == 1)
-                {
-                    var newPt = RotatePtAndPickOneInsidePolygon(lot.points[1], lot.points[0], 90);
-                    var newPt2 = RotatePtAndPickOneInsidePolygon(lot.points.LastButOne(), lot.points.Last(), 90);
-
-                    if(newPt != null)
-                        lot.points.Insert(0, newPt);
-
-                    if (newPt2 != null)
-                        lot.points.Add(newPt2);
-                }
-                else if (lot.streets.Count == 2)
-                {
-                    var stStreetsPt = lot.streets[0].points.Count(p => lot.points.Contains(p));
-                    var stStreetsPt2 = lot.streets[1].points.Count(p => lot.points.Contains(p));
-                    var newPt = RotatePtAndPickOneInsidePolygon(lot.points.LastButOne(), lot.points.Last(), 90);
-                    if (newPt != null)
-                        lot.points.Add(newPt);
-                }
-            }
-            s.Lots.AddRange(lots);
         }
 
         PtWSgmnts RotatePtAndPickOneInsidePolygon(PtWSgmnts ptToRotate, PtWSgmnts pivot, float angle)
@@ -256,37 +156,37 @@ namespace Assets.Game.Scripts.Gen.Models
         {
             if(existingPerps.Any())
             {
-                lot.points.Add(existingPerps.Last());
+                lot.AddCheckPoints(existingPerps.Last());
             }
             else
             {                                
-                var p1 = lot.points[0];                
+                var p1 = lot[0];                
                 var p1Prim = p1.GetRotatedAround(this.points.ItemBefore(p1), 30);
-                var p2 = lot.points.Last();
+                var p2 = lot[^1];
                 var p2Prim = p2.GetRotatedAround(this.points.ItemAfter(p2), -30);
                 var intersection = Vector.GetIntersectionPoint(p1Prim, p1, p2Prim, p2);
                 PtWSgmnts pt = new PtWSgmnts(intersection.Value);
-                lot.points.Add(pt);
+                lot.AddCheckPoints(pt);
                 existingPerps.Add(pt);
             }
         }
 
         void AddPerpLineReturnLastPt(Lot lot, List<PtWSgmnts> existingPerps)
-        {            
-            var p2 = lot.points.Last();
+        {
+            var p2 = lot[^1];
             var p2Prim = p2.GetRotatedAround(this.points.ItemBefore(p2), 30);
 
-            lot.points.Add(p2Prim);
+            lot.AddCheckPoints(p2Prim);
 
             if(existingPerps.Any())
             {
-                lot.points.Add(existingPerps.Last());
+                lot.AddCheckPoints(existingPerps.Last());
             }
             else
             {
-                var p1 = lot.points[0];
+                var p1 = lot[0];
                 var p1Prim = p1.GetRotatedAround(this.points.ItemBefore(p1), 30);
-                lot.points.Add(p1Prim);
+                lot.AddCheckPoints(p1Prim);
                 existingPerps.Add(p1);
             }
 
@@ -296,11 +196,11 @@ namespace Assets.Game.Scripts.Gen.Models
         
         public void DesignateLotsWithinWalls(SettlementModel sModel, int lotSize)
         {
-            var rnd = RoadGraphGenChaos.GetRandom();
+            var rnd = RoadGraphGenChaosByPos.GetRandom();
             var streetPoints = new List<PtWSgmnts>[streets.Count];
             for (int i = 0; i < streets.Count; i++)
             {
-                streetPoints[i] = streets[i].points.Where(p => this.points.Contains(p)).Distinct(new PointsComparer(false)).ToList();
+                streetPoints[i] = streets[i].Points.Where(p => this.points.Contains(p)).Distinct(new PointsComparer(false)).ToList();
             }
 
             var lots = new List<Lot>();
@@ -338,9 +238,9 @@ namespace Assets.Game.Scripts.Gen.Models
                     foreach (var size in lotsSizes)
                     {
                         var lot = new Lot(this);
-                        lot.points.AddRange(street.GetRange(total, size + 1));
+                        lot.AddCheckPoints(street.GetRange(total, size + 1).ToArray());
                         //lot.points.AddRange(backYard.GetRange(total, size + 1).Reversed());
-                        lot.points.Add(center);
+                        lot.AddCheckPoints(center);
 
                         //var circ = lot.GetCircumference();
                         //if (circ > 25f)
@@ -384,9 +284,9 @@ namespace Assets.Game.Scripts.Gen.Models
             }
             street.AddCheckPoints(closestOpp);
             street.CalculateLength();
-            street.Split(RoadGraphGenChaos.GetRandom(), 1f);
-            blockPoints1.AddRange(street.points.Reversed());
-            blockPoints2.AddRange(street.points.Reversed());
+            street.Split(RoadGraphGenChaosByPos.GetRandom(), 1f);
+            blockPoints1.AddRange(street.Points.Reversed());
+            blockPoints2.AddRange(street.Points.Reversed());
             this.streets.Add(street);
 
             var newBlock = new Block(this.streets, parent, blockPoints1);

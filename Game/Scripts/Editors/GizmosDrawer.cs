@@ -117,10 +117,10 @@ namespace Assets.Game.Scripts.Editors
         internal static void DrawPolygon(Polygon poly, Vector2? shift = null, float sphereSize = 0f)
         {
             var dist = shift.HasValue ? shift.Value : Vector2.zero;
-            for(var i = 0; i < poly.points.Count; i++)
+            for(var i = 0; i < poly.Count; i++)
             {
-                var point = poly.points[i];
-                var nextPt = poly.points.Neighbour(i, 1);
+                var point = poly[i];
+                var nextPt = poly.Neighbour(i, 1);
                 Gizmos.DrawLine(point.pos + dist, nextPt.pos + dist);
                 if (sphereSize > 0)
                 {
@@ -182,9 +182,23 @@ namespace Assets.Game.Scripts.Editors
         {
             for (int i = 0; i < count; i++)
             {
-                Debug.DrawRay(value + new Vector2(.1f * i, 0), Vector2.up * 5f, color);
+                Debug.DrawRay(value + new Vector2(.25f * i, 0), Vector2.up * 5f, color);
             }
             
+        }
+
+        internal static void DrawRays(List<Vector2> pts, Color color)
+        {
+            foreach (var pt in pts)
+            {
+                Debug.DrawRay(pt, Vector2.up * 5f, color);
+            }
+
+        }
+
+        internal static void DrawRays(List<PtWSgmnts> pts, Color color)
+        {
+            DrawRays(pts.Select(p => p.pos).ToList(), color);
         }
     }
 }

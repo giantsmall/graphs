@@ -13,7 +13,7 @@ namespace Assets.Game.Scripts.Gen.Models
         {
         }
 
-        public Moat(Polygon polygon, float thickness) : base(polygon.points, thickness)
+        public Moat(Polygon polygon, float thickness) : base(polygon.Points, thickness)
         {
 
         }

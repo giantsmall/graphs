@@ -450,9 +450,9 @@ namespace Assets.Game.Scripts.Utility
 
         public static void RotatePolygonAroundPivot(this Polygon r, Vector3 pivot, float angle)
         {
-            for (int i = 0; i < r.points.Count; i++)
+            for (int i = 0; i < r.Count; i++)
             {
-                r.points[i].pos = r.points[i].pos.RotateAroundPivot(pivot, angle);
+                r[i].pos = r[i].pos.RotateAroundPivot(pivot, angle);
             }
         }
 
@@ -471,6 +471,12 @@ namespace Assets.Game.Scripts.Utility
         {
             var newIndex = (index + change + (change < 0? list.Count : 0)) % list.Count;
             return list[newIndex];
+        }
+
+        public static PtWSgmnts Neighbour(this Polygon p, int index, int change)
+        {
+            var newIndex = (index + change + (change < 0 ? p.Count : 0)) % p.Count;
+            return p[newIndex];
         }
 
         public static int WrapIndex<T>(this int index, int addition, List<T> list)
@@ -517,6 +523,7 @@ namespace Assets.Game.Scripts.Utility
         public static void RemoveList<T>(this List<T> list, List<T> listToRemove)
         {
             list.RemoveAll(i => listToRemove.Contains(i));
+            //list = list.Except(listToRemove).ToList();
         }
 
         public static List<int> DivideIntoSizes(this int sum, int min, int max, System.Random rnd)
@@ -625,21 +632,28 @@ namespace Assets.Game.Scripts.Utility
         public static List<Vector2> ReorderPointsByAngleCCW(this List<Vector2> points)
         {
             var center = points.FindCenter();
-            var p0 = points[0];
             return points
                 .Distinct()
                 .OrderBy(p => Vector2.SignedAngle(Vector2.right, p - center)) // bardziej stabilne niż `Angle()`
                 .ToList();
-
         }
 
         public static List<Vector2> ReorderPointsByAngleCW(this List<Vector2> points)
         {
             var center = points.FindCenter();
-            var p0 = points[0];
             return points
                 .Distinct()
                 .OrderBy(p => -Vector2.SignedAngle(Vector2.right, p - center)) // bardziej stabilne niż `Angle()`
+                .ToList();
+
+        }
+
+        public static List<PtWSgmnts> ReorderPointsByAngleCW(this List<PtWSgmnts> points)
+        {
+            var center = points.FindCenter();
+            return points
+                .Distinct()
+                .OrderBy(p => -Vector2.SignedAngle(Vector2.right, p.pos - center)) // bardziej stabilne niż `Angle()`
                 .ToList();
 
         }

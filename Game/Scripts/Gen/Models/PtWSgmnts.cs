@@ -186,7 +186,6 @@ namespace Assets.Game.Scripts.Gen.Models
 
             }
         }
-
         internal float DistanceTo(PtWSgmnts p)
         {
             return this.DistanceTo(p.pos);
@@ -221,7 +220,34 @@ namespace Assets.Game.Scripts.Gen.Models
                 n.Neighbours.Remove(pToAbsorb);
             }            
         }
-}
+
+        public int parentCount => parentPolygons.Count;
+        List<Polygon> parentPolygons = new List<Polygon>();
+        public List<Polygon> Parents => parentPolygons;
+        internal int RemoveFromParentPolygons()
+        {
+            int count = 0;
+            foreach (var poly in parentPolygons)
+            {
+                poly.RemoveCheckPoints(this);
+                count++;
+            }
+            parentPolygons.Clear();
+            return count;
+              
+        }
+
+        internal void AddParentPolygon(Polygon polygon)
+        {
+            this.parentPolygons.Add(polygon);
+            this.parentPolygons = parentPolygons.Distinct().ToList();
+        }
+
+        internal void RemoveFromParentPolygon(Polygon polygon)
+        {
+            this.parentPolygons.Remove(polygon);
+        }
+    }
 
     public class PointsComparer : EqualityComparer<PtWSgmnts>
     {
@@ -230,7 +256,6 @@ namespace Assets.Game.Scripts.Gen.Models
         {
             boolIdMatters = idMatters;
         }
-
 
         public static bool SameCoords(PtWSgmnts p1, PtWSgmnts p2)
         {

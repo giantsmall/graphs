@@ -33,7 +33,7 @@ namespace Assets.Game.Scripts.Gen
             shift = Vector2.zero;
             foreach (var parcel in parcels)
             {
-                GizmosDrawer.DrawVectorList(parcel.points, shift, true, 0.15f);
+                GizmosDrawer.DrawVectorList(parcel.Points, shift, true, 0.15f);
             //    shift += new Vector2(.15f, .15f);
             }
 
@@ -44,7 +44,7 @@ namespace Assets.Game.Scripts.Gen
         public void Generate()
         {
             
-            RoadGraphGenChaos.ClearLog();
+            RoadGraphGenChaosByPos.ClearLog();
             index = 0;
             parcels.Clear();
             cycles.Clear();
@@ -207,13 +207,13 @@ namespace Assets.Game.Scripts.Gen
                 return result;
             }
 
-            if (block.points.Count < 3)
+            if (block.Count < 3)
             {
                 Debug.LogError("Block has less than 3 points");
             }
 
 
-            if (block.points.Count == 3)
+            if (block.Count == 3)
             {
                 var triangleNiceAndSmooth = shortestLenCondition;
                 var heightOfLongestEdgeBigEnough = block.GetHeightOfEdge(longestEdgeIndex) > minDepth;
@@ -239,7 +239,7 @@ namespace Assets.Game.Scripts.Gen
 
             //rect
             //no edges too short
-            if (block.points.Count == 4)
+            if (block.Count == 4)
             {
                 var niceRect = shortestLenCondition;
                 var deepEnough = dists.All(d => d > minDepth);
@@ -258,7 +258,7 @@ namespace Assets.Game.Scripts.Gen
             }
             
             //pentagon
-            if (block.points.Count >= 5)
+            if (block.Count >= 5)
             {
                 var pentagonNiceAndSmooth = shortestLenCondition;
                 if (pentagonNiceAndSmooth)
@@ -277,10 +277,10 @@ namespace Assets.Game.Scripts.Gen
         {
             //make perp line based on angles with neighbours and get offset distance to cut
 
-            var prevP = block.points.Neighbour(shortestEdgeIndex, -1);
-            var shortestEdgeP1 = block.points[shortestEdgeIndex];
-            var shortestEdgePNext = block.points.Neighbour(shortestEdgeIndex, 1);
-            var nextP = block.points.Neighbour(shortestEdgeIndex, 2);
+            var prevP = block.Neighbour(shortestEdgeIndex, -1);
+            var shortestEdgeP1 = block[shortestEdgeIndex];
+            var shortestEdgePNext = block.Neighbour(shortestEdgeIndex, 1);
+            var nextP = block.Neighbour(shortestEdgeIndex, 2);
 
             var prevAng = Vector2.Angle(prevP.pos - shortestEdgeP1.pos, shortestEdgePNext.pos - shortestEdgeP1.pos);
             var nextAng = Vector2.Angle(nextP.pos - shortestEdgePNext.pos, shortestEdgePNext.pos - shortestEdgeP1.pos);
@@ -406,12 +406,12 @@ namespace Assets.Game.Scripts.Gen
             else lotWidths.Add(longestEdge);
 
             var prevLotLastDeep = Vector2.zero; //intersect any edge perp to longestOne at its start? or just take any vertext
-            var prevLotLastShallow = poly.points[longestEdgeIndex].pos;
+            var prevLotLastShallow = poly[longestEdgeIndex].pos;
             foreach (var lotW in lotWidths)
             {
                 var t = lotW / longestEdge;
                 longestEdge -= lotW;
-                var newLastShallow = Vector2.Lerp(prevLotLastShallow, poly.points.Neighbour(longestEdgeIndex, 1).pos, t);
+                var newLastShallow = Vector2.Lerp(prevLotLastShallow, poly.Neighbour(longestEdgeIndex, 1).pos, t);
                 var newLastDeep = Vector2.zero; //intersect any edge perp to longestOne
 
                 var lot = new List<Vector2>() { newLastDeep, prevLotLastDeep, prevLotLastShallow, newLastShallow };

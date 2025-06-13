@@ -221,16 +221,16 @@ namespace Assets.Game.Scripts.Gen
                 count = 0;
                 foreach (var edgeToIntersect in edges)
                 {
-                    for (int i = 0; i < p.points.Count; i++)
+                    for (int i = 0; i < p.Count; i++)
                     {
-                        var nextIndex = (i + 1) % p.points.Count;
-                        var pt = p.points[i];
-                        var nextP = p.points[nextIndex];
+                        var nextIndex = (i + 1) % p.Count;
+                        var pt = p[i];
+                        var nextP = p[nextIndex];
                         
                         var intersection = IdentifyIntersection(edgeToIntersect, pt, nextP, p, i, center);
                         if (intersection != null)
                         {
-                            p.points.Insert(nextIndex, intersection);
+                            p.InsertCheckpoint(intersection, nextIndex);
                         }
                     }
                 }

@@ -173,22 +173,17 @@ public class Vector : MonoBehaviour
 
         return Intersection;
     }
+    public static Vector2 GetPerpendicularIntersection(PtWSgmnts start, PtWSgmnts end, PtWSgmnts point)    
+    {
+        return GetPerpendicularIntersection(start.pos, end.pos, point.pos);
+    }
 
     public static Vector2 GetPerpendicularIntersection(Vector2 start, Vector2 end, Vector2 point)
     {
         Vector2 AB = end - start;
         Vector2 AP = point - start;
         float t = Vector2.Dot(AP, AB) / Vector2.Dot(AB, AB);
-
-        // Punkt przeciêcia
         Vector2 H = start + t * AB;
-
-        if (false)// (draw)
-        {
-            Debug.DrawRay(H, Vector2.up * 2f, Color.green, 3f);
-            Debug.DrawLine(start, end, Color.yellow, 3f);
-            Debug.DrawLine(point, H, Color.red, 3f);
-        }
         return H;
     }
 
@@ -200,15 +195,25 @@ public class Vector : MonoBehaviour
         return extendedEnd;
     }
 
-    internal static float GetAngleBetweenVectors(Vector2 pos1, Vector2 center, Vector2 pos2)
+    [Obsolete]
+    internal static float GetAngleBetweenVectors(Vector2 pos1, Vector2 center, Vector2 pos2, bool singed = true)
     {
-        return Vector2.SignedAngle(center - pos1, center - pos2);
+        if(singed)
+            return Vector2.SignedAngle(center - pos1, pos2 - center);
+        else return Vector2.Angle(center - pos1, pos2 - center);
     }
 
-    internal static float GetAngleByDistToPerpInters(Vector2 pos1, Vector2 center, Vector2 pos2)
-    {        
-        var inters = GetPerpendicularIntersection(pos1, pos2, center);
+    public static float GetInternalAngle(Vector2 prev, Vector2 current, Vector2 next)
+    {
+        Vector2 v1 = (prev - current).normalized;
+        Vector2 v2 = (next - current).normalized;
 
-        return 999;
+        float angle = Mathf.Acos(Mathf.Clamp(Vector2.Dot(v1, v2), -1f, 1f)) * Mathf.Rad2Deg;
+
+        float cross = v1.x * v2.y - v1.y * v2.x;
+        if (cross < 0)
+            angle = 360 - angle;
+
+        return angle;
     }
 }

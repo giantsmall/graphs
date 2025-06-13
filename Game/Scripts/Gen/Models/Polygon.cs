@@ -10,11 +10,29 @@ using Assets.Game.Scripts.Gen.GraphGenerator;
 using NUnit.Framework;
 using Assets.Game.Scripts.Editors;
 using Unity.Profiling;
+using System.Runtime.InteropServices;
 
 namespace Assets.Game.Scripts.Gen.Models
 {
     public class Polygon
     {
+        public float Length { get; private set; }
+        protected List<PtWSgmnts> points { get; set; } = new();
+        public List<PtWSgmnts> Points => points;
+        public int Count => points.Count;
+        public PtWSgmnts this[int i]
+        { 
+            get
+            {
+                return points[i];
+            }
+            set
+            {
+                points[i] = value;
+            }
+        }
+
+
         static uint Index = 0;
         public static void ResetCount()
         {
@@ -42,9 +60,8 @@ namespace Assets.Game.Scripts.Gen.Models
             var ySize = maxY - minY;
             return new Rect(new Vector2(minX - offset * xSize, minY - offset * ySize), new Vector2(xSize * (1 + 2 * offset), ySize * (1 + 2 * offset)));
         }
-        public float Length { get; private set; }
-        public List<PtWSgmnts> points { get; set; } = new();
-
+     
+        
         public Polygon()
         {
             Id = Index++;
@@ -100,6 +117,11 @@ namespace Assets.Game.Scripts.Gen.Models
         public void ReorderPointsByAngleCCW()
         {
             this.points.Select(p => p.pos).ToList().ReorderPointsByAngleCCW();
+        }
+
+        public void ReorderPointsByAngleCW()
+        {
+            this.points = this.points.ReorderPointsByAngleCW();
         }
 
         public bool ContainsCheckpointPos(PtWSgmnts point, float epsilon = .01f)
@@ -353,7 +375,7 @@ namespace Assets.Game.Scripts.Gen.Models
                 }
             }
 
-            var rnd = RoadGraphGenChaos.GetRandom();
+            var rnd = RoadGraphGenChaosByPos.GetRandom();
             if (rnd.NextBool(.3f))
             {
                 var tmp = minInd1.WrapIndex(rnd.Next(-1, 2), points);
@@ -414,13 +436,13 @@ namespace Assets.Game.Scripts.Gen.Models
 
         public void SplitAndDistort(float maxLength)
         {
-            var rnd = RoadGraphGenChaos.GetRandom();
+            var rnd = RoadGraphGenChaosByPos.GetRandom();
             SplitAndDistortOnWorldMap(rnd, maxLength);
         }
 
         public void SplitAndDistortOnWorldMap(float maxLength)
         {
-            var rnd = RoadGraphGenChaos.GetRandom();
+            var rnd = RoadGraphGenChaosByPos.GetRandom();
             SplitAndDistortOnWorldMap(rnd, maxLength);
         }
 
@@ -489,10 +511,9 @@ namespace Assets.Game.Scripts.Gen.Models
             }
         }
 
-
         public void SubdivideIteration(int index, int nextIndex, float distortionFactor = 0)
         {
-            var rnd = RoadGraphGenChaos.GetRandom();
+            var rnd = RoadGraphGenChaosByPos.GetRandom();
             var t = rnd.NextFloat() * 0.2f + 0.4f;
             var middlePoint = new PtWSgmnts(Vector2.Lerp(this.points[index].pos, this.points[nextIndex].pos, t));
             this.points.Insert(nextIndex, middlePoint);
@@ -501,7 +522,7 @@ namespace Assets.Game.Scripts.Gen.Models
 
         void Distort(int index, int nextIndex, float distortionFactor)
         {
-            var rnd = RoadGraphGenChaos.GetRandom();
+            var rnd = RoadGraphGenChaosByPos.GetRandom();
             if (distortionFactor > 0)
             {
                 var angle = Mathf.PI * 2 * rnd.NextFloat();
@@ -533,6 +554,10 @@ namespace Assets.Game.Scripts.Gen.Models
         internal void AddCheckPoints(params PtWSgmnts[] points)
         {
             this.points.AddRange(points);
+            foreach (var p in points)
+            {
+                p.AddParentPolygon(this);
+            }
             this.CalculateLength();
         }
         internal void AddCheckPoints(params Vector2[] points)
@@ -542,14 +567,19 @@ namespace Assets.Game.Scripts.Gen.Models
         }
 
 
-        public void InsertCheckpoints(int index, params PtWSgmnts[] p)
+        public void InsertCheckpoints(int index, params PtWSgmnts[] pts)
         {
-            this.points.InsertRange(index, p);
+            this.points.InsertRange(index, pts);
+            foreach(var p in pts)
+            {
+                p.AddParentPolygon(this);
+            }
         }
 
         public void InsertCheckpoint(PtWSgmnts p, int index)
         {
             this.points.Insert(index, p);
+            p.AddParentPolygon(this);
         }
 
         internal void SubdivideOnceAndMoveNewPointsToCenter(System.Random rnd, Vector2 center)
@@ -675,13 +705,16 @@ namespace Assets.Game.Scripts.Gen.Models
 
         internal List<float> GetInnerAngles()
         {
+            var center = this.FindCenter();
+            this.ReorderPointsByAngleCW();
             var angles = new List<float>();
             for (int i = 0; i < this.points.Count; i++)
             {
                 var pI = this.points[i];
                 var prevP = this.points.Neighbour(i, -1);
                 var nextP = this.points.Neighbour(i, 1);
-                var angle = Vector.GetAngleBetweenVectors(prevP.pos, pI.pos, nextP.pos);                
+                //angle = Vector.GetAngleBetweenVectors(prevP.pos, pI.pos, nextP.pos, signed);
+                var angle = Vector.GetInternalAngle(prevP.pos, pI.pos, nextP.pos);
                 angles.Add(Mathf.Round(angle));
             }
             return angles;
@@ -696,7 +729,7 @@ namespace Assets.Game.Scripts.Gen.Models
                 var nextP = this.points.Neighbour(i, 1);
                 if((p.pos - nextP.pos).magnitude < float.Epsilon)
                 {
-                    this.points.RemoveAt(i);
+                    this.RemoveAt(i);
                     count++;
                     i--;
                 }
@@ -714,7 +747,7 @@ namespace Assets.Game.Scripts.Gen.Models
             }
         }
 
-        internal void RemovePointWByPos(PtWSgmnts p0)
+        internal void RemovePointByPos(PtWSgmnts p0)
         {
             var ptsWithP0Pos = this.points.Where(p => p.pos == p0.pos).ToList();
             if(ptsWithP0Pos.Count > 1)
@@ -810,6 +843,91 @@ namespace Assets.Game.Scripts.Gen.Models
         internal int ContainsCheckpointsByPos(List<PtWSgmnts> points)
         {
             return points.Count(p => this.ContainsCheckpointPos(p));
+        }
+
+        internal void ReplacePointsWithSamePos(List<PtWSgmnts> newPoints)
+        {
+            for (int i = 0; i < this.points.Count; i++)
+            {
+                var currP = this.points[i];
+                
+                var existingPt = newPoints.FirstOrDefault(p => p.DistanceTo(currP) < float.Epsilon);
+                if (existingPt != null)
+                {
+                    this.RemoveAt(i);
+                    this.InsertCheckpoint(existingPt, i);                    
+                }
+            }
+        }
+
+        internal void RemoveAt(int i)
+        {
+            this.points[i].RemoveFromParentPolygon(this);
+            this.points.RemoveAt(i);
+        }
+
+        internal void Clear()
+        {
+            this.points.ForEach(p => p.RemoveFromParentPolygon(this));
+            this.points.Clear();
+        }
+
+        internal void RemoveCheckPoints(params PtWSgmnts[] ptWSgmnts)
+        {            
+            this.points.RemoveList(ptWSgmnts.ToList());
+        }
+
+        public static void DrawParentCountPerPt(params Polygon[] polys)
+        {
+            var pts = polys.SelectMany(p => p.Points).Distinct(new PointsComparer(true)).ToList();
+            foreach(var pt in pts)
+            {
+                GizmosDrawer.DrawRays(pt.pos, Color.red, pt.parentCount);
+            }
+        }
+
+        public static void DrawCenters(List<Polygon> polys)
+        {
+            polys.ForEach(p => GizmosDrawer.DrawRay(p.FindCenter(), Color.red));
+        }
+
+        internal void RemoveDuplicates()
+        {
+            this.points = this.points.Distinct(new PointsComparer()).ToList();
+            this.points = this.points.Distinct(new PointsComparer(true)).ToList();
+        }
+
+        internal Vector2 GetPerIntersWithNeighbours(int i)
+        {
+            var prev = this.points.Neighbour(i, -1);
+            var next = this.points.Neighbour(i, 1);
+            return Vector.GetPerpendicularIntersection(prev, next, points[i]);
+        }
+
+        internal void AbsorbPolygon(Polygon polygon)
+        {
+            var mutualPoints = this.FindMutualPoints(polygon);
+            var remainingPoints = polygon.Points.Except(mutualPoints).ToList();
+
+            if(mutualPoints.Count < 3)
+            {
+                Debug.LogError($"Mutual points count invalid: {mutualPoints.Count}");
+            }
+            else
+            {
+                var first = mutualPoints.First();
+                var last = mutualPoints.Last();
+                var ptsInBetween = mutualPoints.TakeRangeBetween(1, mutualPoints.Count - 2);
+
+                var indexOfFirst = this.points.IndexOf(first);
+                this.points = points.Except(ptsInBetween).ToList();
+                this.InsertCheckpoints(indexOfFirst + 1, remainingPoints.Reversed().ToArray());
+            }
+        }
+
+        public List<PtWSgmnts> FindMutualPoints(Polygon polygon)
+        {
+            return polygon.Points.Where(p => this.ContainsCheckpoint(p)).ToList();
         }
     }
 }

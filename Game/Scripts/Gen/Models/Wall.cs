@@ -13,7 +13,7 @@ namespace Assets.Game.Scripts.Gen.Models
         {
         }
 
-        public Wall(Polygon polygon, float thickness) :base(polygon.points, thickness)
+        public Wall(Polygon polygon, float thickness) :base(polygon.Points, thickness)
         {
             
         }
