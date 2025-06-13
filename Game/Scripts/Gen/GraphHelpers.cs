@@ -246,7 +246,7 @@ namespace Assets.Game.Scripts.Gen
         public static List<LineSegment> intersectingSegments = new List<LineSegment>();
         public static PtWSgmnts IdentifyIntersection(LineSegment intersectingEdge, PtWSgmnts pt, PtWSgmnts nextPt, Polygon p, int i, Vector2 center)//
         {
-            var inters = VectorIntersect.GetIntersectionPoint(intersectingEdge.p0, intersectingEdge.p1, pt, nextPt);
+            var inters = Vector.GetIntersectionPoint(intersectingEdge.p0, intersectingEdge.p1, pt, nextPt);
             if (inters.HasValue)
             {
                 if (!p.ContainsPoint(intersectingEdge.p0))

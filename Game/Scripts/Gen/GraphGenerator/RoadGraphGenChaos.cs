@@ -77,6 +77,7 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
         public float MoatDistFromWall = 0.3f;
         public float MoatDistToRoad = 0.3f;
 
+        public bool FlattenTriangles = false;
         public int MapSize = 100;
         public static bool FixedRandom { get; internal set; } = true;
         public static bool Randomize { get; internal set; } = false;
@@ -149,7 +150,7 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
             GraphHelpers.intersectingSegments.Clear();
             badPoints.Clear();
             badLots.Clear();
-
+            gatesCandidates.Clear();
             allEdges.Clear();
             blocks.Clear();
             districtFaces.Clear();
@@ -183,52 +184,58 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
             innerCircleCycles = innerCircleCycles.Take(InnerCirDistrictCount).ToList();
             var closestCount = innerCircleCycles.Count;
             districtFaces = districtFaces.Where(f => !innerCircleCycles.Contains(f)).ToList();
-
+            var outerDistricts = districtFaces.Except(innerCircleCycles).ToList();
             List<Polygon> mergedPolygons = PolygonMerge.MergeAdjacentPolygons(innerCircleCycles);
             districtFaces.AddRange(mergedPolygons);
             innerCircle = mergedPolygons.FirstOrDefault();
-            if (PolishInnerCircle)
-            {
-                RemoveVerticesFromShortEdges(innerCircle, districtFaces);
-                ReduceObtuseAngles(innerCircle, districtFaces);
-            }
 
-            var distrNeighToInnerCircle = ExpandInnerCircleToFitRoad(innerCircle);
-            RemoveAnglesAround180Degrees(innerCircle, distrNeighToInnerCircle);
+            RemoveVerticesFromShortEdges(innerCircle, districtFaces);
+            ReduceObtuseAngles(innerCircle, districtFaces);
 
+            RemoveDuplicatedVertexPositions(outerDistricts);
+            var outerDistrNeighToInnerCircle = IdentifyInnerDistricts(innerCircle, districtFaces);
+            RemoveAnglesAround180Degrees(innerCircle, outerDistrNeighToInnerCircle);
+
+            FlattenTrianglesAdjacentToInnerCircle(outerDistrNeighToInnerCircle, innerCircle);
             blocks = SplitInnerAreaIntoPolygons(innerCircle, InnerVoronoiSize);
-            FlattenTrianglesAdjacentToInnerCircle(blocks, innerCircle);
 
-            RemoveAnglesAround180Degrees(blocks);
-            gatesCandidates = IdentifyGatesCandidates(innerCircle, blocks);
-            Debug.Log($"Blocks count = {blocks.Count}");
-            //InsertRoadsBetweenBlocks();
-            
+            var blocksNeighToInnerCircle = IdentifyNeighbours(innerCircle, blocks);
             //RemoveAnglesAround180Degrees(blocks);
+            Debug.Log($"Blocks count = {blocks.Count}");
+            if (FlattenTriangles)
+                FlattenTrianglesAdjacentToInnerCircle(blocksNeighToInnerCircle, innerCircle);
 
+            //var blocksNeighToInnerCircle = ShiftEndPointsToNextNeighbourIfCloseEnough(blocks, innerCircle, outerDistrNeighToInnerCircle, .5f);
+            gatesCandidates = IdentifyGatesCandidates(innerCircle, blocksNeighToInnerCircle, outerDistrNeighToInnerCircle);
+
+            //InsertRoadsBetweenBlocks();
+            RemoveAnglesAround180Degrees(blocksNeighToInnerCircle);
             //Line below should use the most outer polygon overlaying inner circle
-            //RemoveAnglesAround180Degrees(innerCircle, distrNeighToInnerCircle, true);
+            RemoveAnglesAround180Degrees(innerCircle, outerDistrNeighToInnerCircle);
+            return;
+
+            
 
             if (BuildWall)
             { 
-                var wallCenter = BuildLayerAroundInnerCirlce(innerCircle, distrNeighToInnerCircle, WallThickness / 2f);
-                outerWall = BuildLayerAroundInnerCirlce(wallCenter, distrNeighToInnerCircle, WallThickness / 2f);
+                var wallCenter = BuildLayerAroundInnerCirlce(innerCircle, outerDistrNeighToInnerCircle, WallThickness / 2f);
+                outerWall = BuildLayerAroundInnerCirlce(wallCenter, outerDistrNeighToInnerCircle, WallThickness / 2f);
                 s.wall = new Wall(wallCenter, WallThickness);
                 //RemoveAnglesAround180Degrees(wall, distrNeighToInnerCircle, true);
             }
             if (BuildMoat)
             {
-                innerMoat = BuildLayerAroundInnerCirlce(outerWall, distrNeighToInnerCircle, MoatDistFromWall);
-                var moatCenter = BuildLayerAroundInnerCirlce(innerMoat, distrNeighToInnerCircle, MoatWidth / 2f);
+                innerMoat = BuildLayerAroundInnerCirlce(outerWall, outerDistrNeighToInnerCircle, MoatDistFromWall);
+                var moatCenter = BuildLayerAroundInnerCirlce(innerMoat, outerDistrNeighToInnerCircle, MoatWidth / 2f);
                 s.moat = new Moat(moatCenter, MoatWidth);
-                outerMoat = BuildLayerAroundInnerCirlce(moatCenter, distrNeighToInnerCircle, MoatWidth / 2f);
-                roadAroundMoatInner = BuildLayerAroundInnerCirlce(outerMoat, distrNeighToInnerCircle, MoatDistToRoad);
-                var moatStreetCenter = BuildLayerAroundInnerCirlce(roadAroundMoatInner, distrNeighToInnerCircle, RoadWidth / 2f);
+                outerMoat = BuildLayerAroundInnerCirlce(moatCenter, outerDistrNeighToInnerCircle, MoatWidth / 2f);
+                roadAroundMoatInner = BuildLayerAroundInnerCirlce(outerMoat, outerDistrNeighToInnerCircle, MoatDistToRoad);
+                var moatStreetCenter = BuildLayerAroundInnerCirlce(roadAroundMoatInner, outerDistrNeighToInnerCircle, RoadWidth / 2f);
                 s.moatStreet = new Street(moatStreetCenter.points, RoadWidth);
-                roadAroundMoatOuter = BuildLayerAroundInnerCirlce(moatStreetCenter, distrNeighToInnerCircle, RoadWidth / 2f);
+                roadAroundMoatOuter = BuildLayerAroundInnerCirlce(moatStreetCenter, outerDistrNeighToInnerCircle, RoadWidth / 2f);
 
                 //remove neighbour points from outer inner circle
-                foreach (var neigh in distrNeighToInnerCircle)
+                foreach (var neigh in outerDistrNeighToInnerCircle)
                 {
                     var ptsIinside = neigh.points.Where(p => roadAroundMoatInner.ContainsPoint(p)).ToList();
                     foreach(var pt in ptsIinside)
@@ -243,28 +250,117 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
             if (DealWithShortBlockEdges)
             {
                 MergeShortestEdges(blocks, innerCircle);
+
+                //Dont like it below:
                 //MoveRemainingShortEdgesPointsAway(blocks, 2 * minLotWidth, MinBlockAreaToPutShortEdgesAway);
             }
+            
             CreateMainRoads();
+            AdaptOuterDistrictToMainRoads();
+
+
             if (CreateLots)
                 FillBlocksWithLots(minLotDepth, maxLotDepth, minLotWidth, maxLotWidth);
         }
 
-        void FlattenTrianglesAdjacentToInnerCircle(List<Polygon> blocks, Polygon innerCircle)
+        List<Polygon> IdentifyNeighbours(Polygon needsNeighbours, List<Polygon> polys)
         {
-            var innerCircCenter = innerCircle.FindCenter();
-            var neighbourBlocks = blocks.Where(b => b.points.Any(p => innerCircle.ContainsPoint(p))).ToList();            
+            return polys.Where(b => b.points.Any(p => needsNeighbours.ContainsCheckpointPos(p))).ToList();
+
+        }
+
+        List<Polygon> ShiftEndPointsToNextNeighbourIfCloseEnough(List<Polygon> innerPolys, Polygon boundaryPoly, List<Polygon> outerPolys, float epsilon = .5f)
+        {
+            var neighbours = blocks.Where(b => b.points.Any(p => innerCircle.ContainsCheckpointPos(p))).ToList();
+            for (int i = 0; i < boundaryPoly.points.Count; i++)
+            {
+                var pt = boundaryPoly.points[i];
+                var nextPt = boundaryPoly.points.Neighbour(i, 1);
+                if (pt.DistanceTo(nextPt) < epsilon)
+                {
+                    int count = Vector.UpdateMultiplePolygonPointsByPos(innerPolys, pt.pos, nextPt.pos, epsilon);
+                    //Vector.UpdateMultiplePolygonPointsByPos(outerPolys, pt.pos, nextPt.pos, epsilon);
+                    //boundaryPoly.points.RemoveAt(i);
+                }
+            }
+
+            //boundaryPoly.RemovePointsWithSamePos();
+            return neighbours;
+        }
+
+        void RemoveDuplicatedVertexPositions(List<Polygon> polys)
+        { 
+            foreach (var poly in polys)
+            {
+                for (int i = poly.points.Count - 1; i >= 0; i--)
+                {
+                    var p = poly.points[i];
+                    var nextP = poly.points.Neighbour(i, - 1);
+                    if ((p.pos - nextP.pos).magnitude < .1f)
+                    {
+                        poly.points.RemoveAt(i);
+                    }
+                }
+            }
+        }
+
+
+        void MarkPolygonCenters(List<Polygon> polys, Color color, Vector2? shift = null)
+        {
+            var shiftVal = shift.HasValue ? shift.Value : Vector2.zero;
+            foreach (var poly in polys)
+            {
+                Debug.DrawRay(poly.FindCenter() + shiftVal, Vector2.up, color);
+            }
+        }
+
+        void FlattenTrianglesAdjacentToInnerCircle(List<Polygon> polys, Polygon boundaryPoly)
+        {
+            var innerCircCenter = boundaryPoly.FindCenter();
+            var neighbourBlocks = polys.Where(b => b.points.Any(p => boundaryPoly.ContainsPoint(p))).ToList();
+            Debug.LogWarning($"NEIGHBOURS: {neighbourBlocks.Count}");
             foreach (var neigh in neighbourBlocks)
             {
-                if(neigh.points.Count == 3)
+                neigh.RemovePointsWithSamePos();
+                var neighPtsOnBoundary = boundaryPoly.ContainsCheckpointsByPos(neigh.points);
+
+                var furthestPt = neigh.points.First(p => !boundaryPoly.ContainsCheckpointPos(p));
+                if (neigh.points.Count == neighPtsOnBoundary + 1)
                 {
-                    var remainingPts = neigh.points.Where(p => innerCircle.ContainsCheckpoint(p)).ToList();
-                    var furthestPt = neigh.points.First(p => !innerCircle.ContainsCheckpoint(p));
-                    Debug.DrawRay(furthestPt.pos, Vector2.up, Color.red);
-                    Debug.DrawRay(remainingPts[0].pos, Vector2.up, Color.blue);
-                    Debug.DrawRay(remainingPts[1].pos, Vector2.up, Color.blue);
-                    furthestPt.pos = VectorIntersect.GetPerpendicularIntersection(remainingPts[0].pos, remainingPts[1].pos, furthestPt.pos);
-                    blocks.Remove(neigh);
+                    GizmosDrawer.DrawRay(furthestPt.pos, Color.red);
+                }
+                else
+                {
+                    GizmosDrawer.DrawRays(neigh.FindCenter(), Color.green, neigh.points.Count);
+                    //GizmosDrawer.DrawRays(furthestPt.pos, Color.green, neigh.points.Count);
+                }
+
+                if (neigh.points.Count == neighPtsOnBoundary + 1)
+                {
+                    Debug.LogWarning("COUNT == 3");
+                    var remainingPts = neigh.points.Where(p => boundaryPoly.ContainsCheckpointPos(p)).ToList();
+                    furthestPt = neigh.points.First(p => !boundaryPoly.ContainsCheckpointPos(p));
+                    Vector2 newPos = Vector2.zero;
+                    try
+                    {
+                        newPos = Vector.GetPerpendicularIntersection(remainingPts[0].pos, remainingPts[1].pos, furthestPt.pos);
+                    }
+                    catch (Exception)
+                    {
+                        Debug.DrawRay(furthestPt.pos, Vector2.up, Color.red);
+                        if (remainingPts.Any())
+                        {
+                            Debug.DrawRay(remainingPts[0].pos, Vector2.up, Color.blue);
+                            Debug.DrawRay(remainingPts[1].pos, Vector2.up, Color.blue);
+                        }
+                        break;
+                    }
+                    polys.SelectMany(p => p.GetCheckpointsByPos(furthestPt))
+                         .ToList()
+                         .ForEach(p => { p.pos = newPos; });
+                    polys.Remove(neigh);
+
+                    boundaryPoly.InsertCheckpointByPos(newPos);
                 }
             }
         }
@@ -296,13 +392,13 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
             }
         }
 
-        private List<Vector2> IdentifyGatesCandidates(Polygon parentPoly, List<Polygon> blocks)
+        private List<Vector2> IdentifyGatesCandidates(Polygon mainPoly, List<Polygon> innerBlocks, List<Polygon> outerBlocks)
         {
             var candidates = new List<Vector2>();
-            foreach (var pt in parentPoly.points)
+            foreach (var pt in mainPoly.points)
             {
-                var count = blocks.Count(b => b.ContainsCheckpointPos(pt));
-                if(count >= 2)
+                var count = innerBlocks.Count(b => b.ContainsCheckpointPos(pt));
+                if(count > 1)
                 {
                     candidates.Add(pt.pos);
                 }
@@ -310,86 +406,99 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
             return candidates;
         }
 
+        void AdaptOuterDistrictToMainRoads()
+        {
+
+        }
+
         public void CreateMainRoads()
         {
-            return;
             mainRoadDirs = MainRoadDirGen.GenerateMainRoadDirections(rnd, MainRoadsCount);
-           
             foreach(var dir in mainRoadDirs)
             {
                 var gate = gatesCandidates.OrderBy(g => g.DistanceTo(dir)).Take(2).GetRandom(rnd);
                 //perp intersection for wall, moat and moat road
-
                 var mainRoad = new Street(new PtWSgmnts(gate), new PtWSgmnts(dir));
                 s.mainRoads.Add(mainRoad);
             }
 
             if (BuildWall)
             {
-                int maxCount = 100;
-
                 ClearLog();
                 //perp intersection through wall
                 foreach(var road in s.mainRoads)
                 {
+                    int failsafe = 50;
+
                     var moatStrPts = roadAroundMoatOuter.points;
                     moatStrPts = moatStrPts.OrderBy(p => p.DistanceTo(road.p0.pos)).Take(2).ToList();
-                    var moatStrLink = VectorIntersect.GetPerpendicularIntersection(moatStrPts[0].pos, moatStrPts[1].pos, road.p0.pos);
-
-                    var angle = VectorIntersect.GetAngleBetweenVectors(road.p0.pos, moatStrLink, road.p1.pos);
+                    var moatStrLink = Vector.GetPerpendicularIntersection(moatStrPts[0].pos, moatStrPts[1].pos, road.p0.pos);
+                    
+                    var angle = Vector.GetAngleBetweenVectors(road.p0.pos, moatStrLink, road.p1.pos);
                     float len = rnd.NextFloat(2, 5f);
-                    moatStrLink = VectorIntersect.ExtendSegment(road.p0.pos, moatStrLink, len);
+                    moatStrLink = Vector.ExtendSegment(road.p0.pos, moatStrLink, len);
                     road.points.Insert(1, new PtWSgmnts(moatStrLink));
 
+                    //divide line to 10 points and for each point get 3-4 districts distinct
+                    var hullInter = Vector.GetIntersectionWithPolygon(moatStrLink, road.p1.pos, voronoi.HullPointsInOrder());
 
-                    //Find closest voronoi Hull point:
-                    var hullpts = voronoi.HullPointsInOrder();
-                    for (int i = 0; i < hullpts.Count; i++)
+                    List<Vector2> line = Vector.GetPointsBetween(moatStrLink, hullInter, 10);
+                    var districts = new List<Polygon>();
+                    foreach(var pt in line)
                     {
-                        var distContainingMoastLink = districtFaces.FirstOrDefault(d => d.ContainsPoint(moatStrLink));
-                        if (distContainingMoastLink == null)
-                        {
-                            continue;
-                        }
-                        var hullI = hullpts[i];
-                        var hullNextI = hullpts.Neighbour(i, 1);    
-                        var inters =  VectorIntersect.GetIntersectionPoint(hullI, hullNextI, road.p1.pos, moatStrLink);
-                        if (inters.HasValue)
-                        {                            
-                            Polygon closestDist = districtFaces.OrderBy(d => d.FindCenter().DistanceTo(inters.Value)).First();
-                            closestDist.RemovePointWithSamePos();
-                            PtWSgmnts prevP = closestDist.points.OrderBy(p => p.DistanceTo(inters.Value)).First();
-                            road.InsertCheckpoint(prevP, road.points.Count - 1);
-
-                            break;
-                            do
-                            {
-                                var lastPTs = closestDist.GetNeighgboursPtCloserTo(prevP, moatStrLink).Reversed();
-                                if(lastPTs.Any())
-                                {
-                                    prevP = lastPTs.FirstOrDefault();
-                                    road.InsertCheckpoints(2, lastPTs.ToArray());
-
-                                    var dists = districtFaces.Where(d => d.ContainsCheckpointPos(prevP, 2f)).ToList();
-                                    foreach (var dist in dists)
-                                    {
-                                        //Debug.DrawLine(dist.points[0].pos, dist.points[^1].pos, Color.blue);
-                                    }
-                                    closestDist = dists.OrderBy(d => d.FindCenter().DistanceTo(prevP.pos)).Where(d => d.Id != closestDist.Id).FirstOrDefault();
-                                }
-                                else
-                                {
-                                    break;
-                                }
-                            }
-                            while (closestDist.Id != distContainingMoastLink.Id && maxCount-- > 0);
-                            Debug.Log($"Loop ended {maxCount}, prevDist = {closestDist.Id}, newDist = {distContainingMoastLink.Id}");
-                        }
+                        var closestDistricts = districtFaces.OrderBy(f => f.FindCenter().DistanceTo(pt)).Take(3).ToList();
+                        districts.AddRange(closestDistricts);
                     }
+                    districts = districts.Distinct().ToList();
+                    var moatLinkDistrict = districts.First(d => d.ContainsPoint(moatStrLink));
+
+                    //intersection with hull
+                    var stDistrict = districts.OrderBy(d => d.FindCenter().DistanceTo(hullInter)).First();
+                    var stPt = stDistrict.points.OrderBy(p => p.DistanceTo(hullInter)).First();
+                    road.InsertCheckpoint(stPt, road.points.Count - 1);
+
+                    var path = new List<PtWSgmnts>();
+                    while (stDistrict.Id != moatLinkDistrict.Id && failsafe-- > 0)
+                    {                        
+                        stPt = stDistrict.points.OrderBy(p => p.DistanceTo(hullInter)).First();
+                        path.AddRange(stDistrict.GetNeighgboursPtCloserTo(stPt, moatStrLink));
+                        stDistrict = districts.Except(stDistrict).Where(d => d.ContainsCheckpointPos(path.Last())).OrderBy(d => d.FindCenter().DistanceTo(moatStrLink)).First();
+                    }
+
+                    if (Vector.GetAngleBetweenVectors(road.p0.pos, moatStrLink, path.Last().pos) < 90)
+                        path.Remove(path.Last());
+                    else
+                    {
+                        //if
+                    }
+
+                    if (failsafe <= 0)
+                    {
+                        Debug.LogWarning($"Failsafe triggered, points added {path.Count}");
+                        for (int i = 0; i < path.Count; i++)
+                        {
+                            Debug.DrawRay(path[i].pos + Vector2.right * .1f * i, Vector2.up * i / 2f, Color.cyan);
+                        }
+                        break;
+                    }
+                    road.InsertCheckpoints(2, path.Reversed().Distinct(new PointsComparer()).ToArray());
+                    //for (int i = 2; i < road.points.Count - 1; i++)
+                    //{
+                    //    var pi = road.points[i].pos;
+                    //    var pPrev = road.points.Neighbour(i, -1).pos;
+                    //    var pNext = road.points.Neighbour(i, 1).pos;
+
+                    //    var ang = Vector.GetAngleBetweenVectors(pPrev, pi, pNext);
+                    //    if (Mathf.Abs(ang) < 120)
+                    //    {
+                    //        Debug.Log($"Angle = {ang}");
+                    //        road.points.RemoveAt(i);
+                    //        i--;
+                    //    }
+                    //}
                 }
             }
         }
-
         Polygon BuildLayerAroundInnerCirlce(Polygon innerCircle, List<Polygon> neighbourDistricts, float width)
         {
             var innerCircClone = innerCircle.GetDeepClone();
@@ -399,10 +508,10 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
                 var neighbourdsFaces = neighbourDistricts.Where(l => l.ContainsCheckpointPos(innerCircle.points[i])).ToList();
 
                 var p = innerCircClone.points[i];
-                var newPos = VectorIntersect.ExtendSegment(center, p.pos, width);
+                var newPos = Vector.ExtendSegment(center, p.pos, width);
                 neighbourdsFaces.ForEach(pol =>
                 {
-                    pol.UpdatePointPosByPos(p, newPos);
+                    pol.UpdateCheckPointsPosByPos(p.pos, newPos);
                 });
                 innerCircClone.points[i].pos = newPos;
             }
@@ -424,69 +533,89 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
         void RemoveAnglesAround180Degrees(List<Polygon> polys, List<Polygon> neighbours)
         {
             Debug.Log($"All neighbours: {neighbours.Count}");
-            var ptsToRemove = new List<PtWSgmnts>();
             foreach (var poly in polys)
             {
-                var angles = poly.GetInnerAngles();
-                Debug.Log("Remove angles 180 deg: " + angles.Join(';'));
-                for (int i = 0; i < angles.Count; i++)
+                int count = 0;
+                do
                 {
-                    if (Math.Abs(angles[i]) > 170f && Math.Abs(angles[i]) < 190f)
-                    {                       
-                        var p = poly.points[i];
-                        var prevP = poly.points.Neighbour(i, -1);
-                        var nextP = poly.points.Neighbour(i, 1);
-                        
-                        var expNewPos = VectorIntersect.GetPerpendicularIntersection(prevP.pos, nextP.pos, p.pos);
-                    
-                        var filteredNeighbours = neighbours.Where(n => n.ContainsCheckpointPos(p, .1f)).ToList();
-                        foreach (var neigh in filteredNeighbours)
+                    count = 0;
+                    //var angles = poly.GetInnerAngles();
+                    //Debug.Log("Remove angles 180 deg: " + angles.Join(';'));
+                    for (int i = 0; i < poly.points.Count; i++)
+                    {
+                        var pt = poly.points[i];
+                        var ptNext = poly.points.Neighbour(i, 1);
+                        var ptPrev = poly.points.Neighbour(i, -1);
+                        var angle = Vector.GetAngleByDistToPerpInters(ptPrev.pos, pt.pos, ptNext.pos);
+
+
+                        if (angle > 170f && angle < 190f)
                         {
-                            var neighPts = neigh.GetCheckpointsByPos(p , .1f);
-                            foreach(var pt in neighPts)
+                            var p = poly.points[i];
+                            var prevP = poly.points.Neighbour(i, -1);
+                            var nextP = poly.points.Neighbour(i, 1);
+
+                            var expNewPos = Vector.GetPerpendicularIntersection(prevP.pos, nextP.pos, p.pos);
+                            var filteredNeighbours = neighbours.Where(n => n.ContainsCheckpointPos(p, .2f)).ToList();
+                            if(filteredNeighbours.Count > 1)
                             {
-                                if (pt.pos == expNewPos)
+                                foreach (var neigh in filteredNeighbours)
                                 {
-                                    Debug.DrawRay(expNewPos, Vector2.up, Color.black);
+                                    neigh.UpdateCheckPointsPosByPos(p.pos, expNewPos);                                    
                                 }
-                                pt.pos = expNewPos;
+                                
+                                if(p.pos != expNewPos)
+                                {
+                                    count++;
+                                }
+                                p.pos = expNewPos;
                             }
-                            //if (filteredNeighbours.Count == 1)
-                            //{
-                            //    neigh.points = neigh.points.Except(neighPts).ToList();
-                            //}                           
+                            else
+                            {
+                                if(filteredNeighbours.Any())
+                                    filteredNeighbours[0].DeletePointByPos(p.pos);
+                                poly.points.RemoveAt(i);
+                                //angles = poly.GetInnerAngles();
+                                i = 0;
+                            }
                         }
-                        p.pos = expNewPos;
-
-                        poly.points.RemoveAt(i);
-                        angles = poly.GetInnerAngles();
-                        i = 0;
                     }
+
                 }
-
-                //poly.points = poly.points.Except(ptsToRemove).ToList();
+                while (count > 0);
             }
-            
-
         }
 
         List<Polygon> ExpandInnerCircleToFitRoad(Polygon innerCircle)
         {
             List<Polygon> neighbourDistricts = new List<Polygon>();
-            var center = innerCircle.FindCenter();  
+            var center = innerCircle.FindCenter();
             for (int i = 0; i < innerCircle.points.Count; i++)
             {
                 var neighbourdsFaces = districtFaces.Where(l => l.ContainsCheckpointPos(innerCircle.points[i])).ToList().Except(innerCircle).ToList();
-                
+
                 var p = innerCircle.points[i];
-                var newPos = VectorIntersect.ExtendSegment(center, p.pos, RoadWidth);
-                
-                neighbourdsFaces.ForEach(pol => 
+                var newPos = Vector.ExtendSegment(center, p.pos, RoadWidth);
+
+                neighbourdsFaces.ForEach(pol =>
                 {
-                    pol.UpdatePointPosByPos(p, newPos);
+                    pol.UpdateCheckPointsPosByPos(p.pos, newPos);
                 });
                 p.pos = newPos;
 
+                neighbourDistricts.AddRange(neighbourdsFaces);
+            }
+
+            return neighbourDistricts.Distinct().ToList();
+        }
+
+        List<Polygon> IdentifyInnerDistricts(Polygon innerCircle, List<Polygon> polys)
+        {
+            List<Polygon> neighbourDistricts = new List<Polygon>();
+            var center = innerCircle.FindCenter();  
+            for (int i = 0; i < innerCircle.points.Count; i++)
+            {
+                var neighbourdsFaces = polys.Where(l => l.ContainsCheckpointPos(innerCircle.points[i])).ToList().Except(innerCircle).ToList();
                 neighbourDistricts.AddRange(neighbourdsFaces);
             }
 
@@ -587,11 +716,11 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
                     var currP = polygon.points[i];
                     var prevP = polygon.points.Neighbour(i, -1);
                     var nextP = polygon.points.Neighbour(i, 1);
-                    var newPos = VectorIntersect.GetPerpendicularIntersection(prevP.pos, nextP.pos, currP.pos);
+                    var newPos = Vector.GetPerpendicularIntersection(prevP.pos, nextP.pos, currP.pos);
 
                     parentGroup.Where(l => l.ContainsCheckpointPos(currP))
                                .ToList()
-                               .ForEach(pol => { pol.UpdatePointPosByPos(currP, newPos); });
+                               .ForEach(pol => { pol.UpdateCheckPointsPosByPos(currP.pos, newPos); });
                     polygon.points[i].pos = newPos;
                 }
             }
@@ -628,11 +757,11 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
                             var midPoint = (p0.pos + p1.pos) / 2f;
 
 
-                            outerPolygon.UpdatePointPosByPos(p0, midPoint);
+                            outerPolygon.UpdateCheckPointsPosByPos(p0.pos, midPoint);
                             relatedLotsP0.ToList()
-                                         .ForEach(pol => { pol.UpdatePointPosByPos(p0, midPoint); });
+                                         .ForEach(pol => { pol.UpdateCheckPointsPosByPos(p0.pos, midPoint); });
                             relatedLotsP1.ToList()
-                                         .ForEach(pol => { pol.UpdatePointPosByPos(p1, midPoint); });
+                                         .ForEach(pol => { pol.UpdateCheckPointsPosByPos(p1.pos, midPoint); });
 
                             p0.pos = midPoint;
                             p1.pos = midPoint;
@@ -673,7 +802,7 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
                         }
                     }
                 }
-                polygons.ForEach(p => p.RemovePointWithSamePos());
+                polygons.ForEach(p => p.RemovePointsWithSamePos());
                 break;
             }
             while (count > 0 && cap < 100);
@@ -714,7 +843,6 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
 
             //expanding outside outer polygon
             badLots.AddRange(lots.Where(l => l.points.Any(p => !outerPoly.ContainsPoint(p))).ToList());
-
             badPoints.AddRange(lots.SelectMany(l => l.points).Where(p => !outerPoly.ContainsPoint(p)).ToList());
 
             ////area bigger than maxLotWidth * maxLotDepth
@@ -865,8 +993,6 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
             var shift150_150 = new Vector2(150, -150f);
             var shift150_0 = new Vector2(0, 0f);
 
-            
-
             for (int i = 0; i < districtFaces.Count; i++)
             {
                 Color c = Color.HSVToRGB((float)i / districtFaces.Count, 1f, 1f);
@@ -903,16 +1029,14 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
             }
             var innerCirColor = BuildWall ? Color.yellow : Color.red ;
 
-            DrawFace(innerCircle, innerCirColor, shift150_0);
+            DrawFace(innerCircle, innerCirColor, shift150_0 + new Vector2(.025f, 0));
             DrawFace(outerWall, Color.yellow, shift150_0);
             DrawFace(innerMoat, Color.blue, shift150_0);
             DrawFace(outerMoat, Color.blue, shift150_0);
             DrawFace(roadAroundMoatInner, Color.white, shift150_0);
             DrawFace(roadAroundMoatOuter, Color.white, shift150_0);
 
-
-            Gizmos.color = Color.red;
-            GizmosDrawer.DrawSpheres(voronoi.HullPointsInOrder(), .2f);
+            //GizmosDrawer.DrawSpheres(voronoi.HullPointsInOrder(), .2f);
 
             Gizmos.color = Color.white;
             foreach (var mainRoad in s.mainRoads)
@@ -920,8 +1044,8 @@ namespace Assets.Game.Scripts.Gen.GraphGenerator
                 GizmosDrawer.DrawVectorList(mainRoad.points);
             }
 
-            //Gizmos.color = Color.green;
-            //GizmosDrawer.DrawSpheres(gatesCandidates, 0.1f);
+            Gizmos.color = Color.green;
+            GizmosDrawer.DrawSpheres(gatesCandidates, 0.1f);
 
             Gizmos.color = Color.white;
             //GizmosDrawer.DrawSegments(tempEdges);

@@ -264,7 +264,7 @@ namespace Assets.Game.Scripts.Gen.Models
                 var p1Prim = p1.GetRotatedAround(this.points.ItemBefore(p1), 30);
                 var p2 = lot.points.Last();
                 var p2Prim = p2.GetRotatedAround(this.points.ItemAfter(p2), -30);
-                var intersection = VectorIntersect.GetIntersectionPoint(p1Prim, p1, p2Prim, p2);
+                var intersection = Vector.GetIntersectionPoint(p1Prim, p1, p2Prim, p2);
                 PtWSgmnts pt = new PtWSgmnts(intersection.Value);
                 lot.points.Add(pt);
                 existingPerps.Add(pt);

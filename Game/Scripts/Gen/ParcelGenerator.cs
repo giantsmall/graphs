@@ -439,13 +439,13 @@ namespace Assets.Game.Scripts.Gen
 
         public static float PerpendicularDistance(LineSegment line, PtWSgmnts point)
         {
-            var inters = VectorIntersect.GetPerpendicularIntersection(line.p0.pos, line.p1.pos, point.pos);
+            var inters = Vector.GetPerpendicularIntersection(line.p0.pos, line.p1.pos, point.pos);
             return inters.DistanceTo(point.pos);
         }
 
         public static float PerpendicularDistance(Vector2 start, Vector2 end, Vector2 point)
         {
-            var inters = VectorIntersect.GetPerpendicularIntersection(start, end, point);
+            var inters = Vector.GetPerpendicularIntersection(start, end, point);
             return inters.DistanceTo(point);
         }
 
@@ -454,7 +454,7 @@ namespace Assets.Game.Scripts.Gen
         static Vector2 GetOffsetAndInters(Vector2 nextP, float rnDep, Vector2 currP, Vector2 prevP, List<Vector2> poly)
         {
             var (offset1, offset2) = GetOffsetLine(nextP, currP, rnDep, (nextP - currP).magnitude * 2, poly);
-            var intsr = VectorIntersect.GetIntersectionPoint(offset1, offset2, currP, prevP);
+            var intsr = Vector.GetIntersectionPoint(offset1, offset2, currP, prevP);
 
             if(intsr.HasValue)
             {
@@ -484,12 +484,12 @@ namespace Assets.Game.Scripts.Gen
             var nextP = p[(vIndex + 1) % p.Count];
             var offset1 = GetOffsetLine(prevP, currP, distance, (prevP - currP).magnitude / 2f, p);
             var offset2 = GetOffsetLine(nextP, currP, nextDistance, (nextP - currP).magnitude / 2f, p);
-            var inters = VectorIntersect.GetIntersectionPoint(offset1.Item1, offset1.Item2, offset2.Item1, offset2.Item2);
+            var inters = Vector.GetIntersectionPoint(offset1.Item1, offset1.Item2, offset2.Item1, offset2.Item2);
             Vector2 shallowPrev = Vector2.zero, shallowNext = Vector2.zero;
             if (inters.HasValue)
             {
-                shallowPrev = VectorIntersect.GetPerpendicularIntersection(prevP, currP, inters.Value);
-                shallowNext = VectorIntersect.GetPerpendicularIntersection(nextP, currP, inters.Value);
+                shallowPrev = Vector.GetPerpendicularIntersection(prevP, currP, inters.Value);
+                shallowNext = Vector.GetPerpendicularIntersection(nextP, currP, inters.Value);
             }
             else
             {
@@ -509,14 +509,14 @@ namespace Assets.Game.Scripts.Gen
 
             var offset1 = GetOffsetLine(prevP, currP, distances[index], (prevP - currP).magnitude * 2f, p);
             var offset2 = GetOffsetLine(nextP, currP, distances[nextI], (nextP - currP).magnitude * 2f, p);
-            var inters = VectorIntersect.GetIntersectionPoint(offset1.Item1, offset1.Item2, offset2.Item1, offset2.Item2);
+            var inters = Vector.GetIntersectionPoint(offset1.Item1, offset1.Item2, offset2.Item1, offset2.Item2);
             if(!inters.HasValue)
             {
                 var next2P = p.Neighbour(index, 2);
                 var next2I = p.IndexOf(next2P);
                 offset1 = GetOffsetLine(prevP, currP, distances[index], (prevP - currP).magnitude * 2f, p);
                 offset2 = GetOffsetLine(next2P, nextP, distances[next2I], (next2P - nextP).magnitude * 2f, p);
-                inters = VectorIntersect.GetIntersectionPoint(offset1.Item1, offset1.Item2, offset2.Item1, offset2.Item2);
+                inters = Vector.GetIntersectionPoint(offset1.Item1, offset1.Item2, offset2.Item1, offset2.Item2);
                 if(!inters.HasValue)
                 {
                     Debug.LogError("Intersection has no value again ;/");
@@ -525,8 +525,8 @@ namespace Assets.Game.Scripts.Gen
                 }
             }
 
-            var shallowPrev = VectorIntersect.GetPerpendicularIntersection(prevP, currP, inters.Value);
-            var shallowNext = VectorIntersect.GetPerpendicularIntersection(nextP, currP, inters.Value);
+            var shallowPrev = Vector.GetPerpendicularIntersection(prevP, currP, inters.Value);
+            var shallowNext = Vector.GetPerpendicularIntersection(nextP, currP, inters.Value);
             return (inters.Value, shallowPrev, shallowNext);
         }
 
@@ -538,7 +538,7 @@ namespace Assets.Game.Scripts.Gen
             var offset1 = GetOffsetLine(prevP, currP, distance, 0, p);
             var offset2 = GetOffsetLine(nextP, currP, nextDistance, 0, p);
             
-            var inters = VectorIntersect.GetIntersectionPoint(offset1.Item1, offset1.Item2, offset2.Item1, offset2.Item2);
+            var inters = Vector.GetIntersectionPoint(offset1.Item1, offset1.Item2, offset2.Item1, offset2.Item2);
             if(inters.HasValue)
             {
                 offset1.Item2 = inters.Value;
@@ -664,7 +664,7 @@ namespace Assets.Game.Scripts.Gen
             {
                 var prevP = polly[(i - 1 + polly.Count) % polly.Count];
 
-                var inters = VectorIntersect.GetIntersectionPoint(prevP, polly[i], offset1, offset2);
+                var inters = Vector.GetIntersectionPoint(prevP, polly[i], offset1, offset2);
                 if (inters.HasValue)
                 {
                     result.Add((prevP, polly[i]), inters.Value);
@@ -824,8 +824,8 @@ namespace Assets.Game.Scripts.Gen
                 Vector2 prev = cycle[(i - 1 + cycle.Count) % cycle.Count];
                 Vector2 next = cycle[(i + 2) % cycle.Count];
                 
-                Vector2? i0Null = VectorIntersect.IntersectLines(prev, p0, p0o, p1o); // wcześniejsza krawędź z dolnym bokiem
-                Vector2? i1Null = VectorIntersect.IntersectLines(p1, next, p0o, p1o).Value; // następna krawędź z górnym bokiem
+                Vector2? i0Null = Vector.IntersectLines(prev, p0, p0o, p1o); // wcześniejsza krawędź z dolnym bokiem
+                Vector2? i1Null = Vector.IntersectLines(p1, next, p0o, p1o).Value; // następna krawędź z górnym bokiem
 
                 var i0 = i0Null.Value;
                 var i1 = i1Null.Value;

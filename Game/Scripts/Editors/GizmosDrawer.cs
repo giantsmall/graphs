@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using Delaunay.Geo;
+using Assets.Game.Scripts.Utility;
 
 namespace Assets.Game.Scripts.Editors
 {
@@ -112,6 +113,23 @@ namespace Assets.Game.Scripts.Editors
                 }
             }
         }
+
+        internal static void DrawPolygon(Polygon poly, Vector2? shift = null, float sphereSize = 0f)
+        {
+            var dist = shift.HasValue ? shift.Value : Vector2.zero;
+            for(var i = 0; i < poly.points.Count; i++)
+            {
+                var point = poly.points[i];
+                var nextPt = poly.points.Neighbour(i, 1);
+                Gizmos.DrawLine(point.pos + dist, nextPt.pos + dist);
+                if (sphereSize > 0)
+                {
+                    Gizmos.DrawSphere(point.pos + dist, sphereSize);
+                    Gizmos.DrawSphere(nextPt.pos + dist, sphereSize);
+                }
+            }
+        }
+
         internal static void DrawVectorList(List<Vector2> list, bool looped = false, float circleSize = 0f)
         {
             DrawVectorList(list, Vector2.zero, looped, circleSize);
@@ -158,6 +176,15 @@ namespace Assets.Game.Scripts.Editors
         internal static void DrawRay(Vector2 value, Color color)
         {
             Debug.DrawRay(value, Vector2.up * 5f, color);
+        }
+
+        internal static void DrawRays(Vector2 value, Color color, int count)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                Debug.DrawRay(value + new Vector2(.1f * i, 0), Vector2.up * 5f, color);
+            }
+            
         }
     }
 }

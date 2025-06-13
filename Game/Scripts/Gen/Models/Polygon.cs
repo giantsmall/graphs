@@ -102,13 +102,13 @@ namespace Assets.Game.Scripts.Gen.Models
             this.points.Select(p => p.pos).ToList().ReorderPointsByAngleCCW();
         }
 
-        public bool ContainsCheckpointPos(PtWSgmnts point, float epsilon = 1f)
+        public bool ContainsCheckpointPos(PtWSgmnts point, float epsilon = .01f)
         {
-            var pt = points.Where(p => (p.pos - point.pos).magnitude < epsilon).FirstOrDefault();
+            var pt = points.Where(p => p.pos.DistanceTo(point.pos) < epsilon).FirstOrDefault();
             return pt != null;
         }
 
-        public List<PtWSgmnts> GetCheckpointsByPos(PtWSgmnts point, float epsilon = 1f)
+        public List<PtWSgmnts> GetCheckpointsByPos(PtWSgmnts point, float epsilon = .01f)
         {
             var pts = points.Where(p => (p.pos - point.pos).magnitude < epsilon).ToList();
             return pts;
@@ -681,14 +681,13 @@ namespace Assets.Game.Scripts.Gen.Models
                 var pI = this.points[i];
                 var prevP = this.points.Neighbour(i, -1);
                 var nextP = this.points.Neighbour(i, 1);
-                var angle = VectorIntersect.GetAngleBetweenVectors(prevP.pos, pI.pos, nextP.pos);
-                var angle2 = Vector2.SignedAngle(pI.pos - prevP.pos, pI.pos - nextP.pos);
+                var angle = Vector.GetAngleBetweenVectors(prevP.pos, pI.pos, nextP.pos);                
                 angles.Add(Mathf.Round(angle));
             }
             return angles;
         }
 
-        internal void RemovePointWithSamePos()
+        internal void RemovePointsWithSamePos()
         {
             int count = 0;
             for (int i = 0; i < this.points.Count; i++)
@@ -725,16 +724,15 @@ namespace Assets.Game.Scripts.Gen.Models
             this.points = this.points.Except(ptsWithP0Pos).ToList();
         }
 
-        internal int UpdatePointPosByPos(PtWSgmnts currP, Vector2 newPos)
+        internal int UpdateCheckPointsPosByPos(Vector2 currP, Vector2 newPos, float epsilon = .01f)
         {
-            var ptsWithP0Pos = this.points.Where(p => p.pos == currP.pos).ToList();
+            var ptsWithP0Pos = this.points.Where(p => p.pos.DistanceTo(currP) < epsilon).ToList();
             if (ptsWithP0Pos.Count > 1)
             {
                 Debug.LogWarning($"More than one point of same pos found. {ptsWithP0Pos.Count}");
-                
             }
             foreach(var pt in ptsWithP0Pos)
-            {
+            {                
                 pt.pos = newPos;
             }
             return ptsWithP0Pos.Any()? 1 : 0;
@@ -755,7 +753,7 @@ namespace Assets.Game.Scripts.Gen.Models
             return false;
         }
 
-        internal List<PtWSgmnts> GetNeighgboursPtCloserTo(PtWSgmnts neighbourTo, Vector2 destination)
+        internal List<PtWSgmnts> GetNeighgboursPtCloserTo(PtWSgmnts startingPt, Vector2 destination)
         {
             var result = new List<PtWSgmnts>();
             float resultDist = float.MinValue;
@@ -763,12 +761,12 @@ namespace Assets.Game.Scripts.Gen.Models
 
             do
             {
-                var neighIndes = this.points.IndexOf(neighbourTo);
+                var neighIndes = this.points.IndexOf(startingPt);
                 var prev = this.points.Neighbour(neighIndes, -1);
                 var next = this.points.Neighbour(neighIndes, 1);
                 var prevDist = prev.DistanceTo(destination);
                 var nextDist = next.DistanceTo(destination);
-                neighDist = neighbourTo.DistanceTo(destination);
+                neighDist = startingPt.DistanceTo(destination);
 
                 var resultPt = next;
                 resultDist = nextDist;
@@ -777,12 +775,41 @@ namespace Assets.Game.Scripts.Gen.Models
                     resultPt = prev;
                     resultDist = prevDist;
                 }
-                if(resultDist < neighDist)
+                if (resultDist < neighDist)
                     result.Add(resultPt);
-                neighbourTo = resultPt;
+                startingPt = resultPt;
             }
             while (resultDist < neighDist);
             return result;
+        }
+
+        internal void DeletePointByPos(Vector2 pos)
+        {
+            var ptsWithPos = this.points.Where(p => p.pos == pos).ToList();
+            if (ptsWithPos.Count > 1)
+            {
+                Debug.LogWarning($"More than one point of same pos found. {ptsWithPos.Count}");
+            }
+            this.points = this.points.Except(ptsWithPos).ToList();
+        }
+
+        internal void InsertCheckpointByPos(Vector2 newPos)
+        {
+            for (int i = 0; i < this.points.Count; i++)
+            {
+                var pt = this.points[i];
+                var nextPt = this.points.Neighbour(i, 1);
+                if(ParcelGenerator.IsPointOnSegment(newPos, pt.pos, nextPt.pos))
+                {                    
+                    this.points.Insert(this.points.IndexOf(nextPt), new PtWSgmnts(newPos));
+                    break;
+                }
+            }
+        }
+
+        internal int ContainsCheckpointsByPos(List<PtWSgmnts> points)
+        {
+            return points.Count(p => this.ContainsCheckpointPos(p));
         }
     }
 }

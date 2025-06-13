@@ -2,40 +2,53 @@ using Assets.Game.Scripts.Editors;
 using Delaunay.Geo;
 using UnityEngine;
 using Assets.Game.Scripts.Gen.Models;
+using Assets.Game.Scripts.Utility;
 using System;
 using System.Collections.Generic;
 using Assets.Game.Scripts.Gen;
 
-public class VectorIntersect : MonoBehaviour
+public class Vector : MonoBehaviour
 {
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
-        
+
     }
 
     // Update is called once per frame
     void Update()
     {
-        
+
     }
 
-    void OnDrawGizmos()
+    public static Vector2 GetIntersectionWithPolygon(Vector2 start, Vector2 end, List<Vector2> polygon)
     {
-        LineSegment segment = new LineSegment(new PtWSgmnts(0f, 0f), new PtWSgmnts(2f, 2f));
-        //LineSegment segment2 = new LineSegment(new PointWithSegments(0f, 2f), new PointWithSegments(-2, -4f));
-        LineSegment segment2 = new LineSegment(new PtWSgmnts(0f, 2f), new PtWSgmnts(2f, 0f));
+        for (int i = 0; i < polygon.Count; i++)
+        {
+            var pt = polygon[i];
+            var ptNext = polygon.Neighbour(i, 1);
 
-        Gizmos.color = Color.red;
-        //Gizmos.DrawLine(segment.p0.pos, segment.p1.pos);
-        //Gizmos.DrawLine(segment2.p0.pos, segment2.p1.pos);
-
-        var result = segment.Intersects(segment2);
-        var point = segment.GetIntersectionPoint(segment2);
-
-        var r1 = GetIntersectionPoint(segment.p0.pos, segment.p1.pos, segment2.p0.pos, segment2.p1.pos);
-        var r2 = GetIntersection(segment.p0.pos, segment.p1.pos, segment2.p0.pos, segment2.p1.pos);
+            var inters = GetIntersectionPoint(start, end, pt, ptNext);
+            if(inters.HasValue)
+                return inters.Value;
+        }
+        throw new Exception("No intersection found");
     }
+
+    public static List<Vector2> GetPointsBetween(Vector2 start, Vector2 end, int totalPoints)
+    {
+        var middlePts = totalPoints - 2;
+        List<Vector2> list = new() { start };
+        var dist = start.DistanceTo(end) / middlePts;
+        for (int i = 1; i <= middlePts; i++)
+        {
+            var t = i / (float)middlePts;
+            list.Add(Vector2.Lerp(start, end, t));
+        }
+        list.Add(end);
+        return list;
+    }
+
     public static Vector2? GetIntersectionPoint(PtWSgmnts p1, PtWSgmnts p2, PtWSgmnts p3, PtWSgmnts p4)
     {
         return GetIntersectionPoint(p1.pos, p2.pos, p3.pos, p4.pos);
@@ -79,6 +92,16 @@ public class VectorIntersect : MonoBehaviour
         double py = ((x1 * y2 - y1 * x2) * (y3 - y4) - (y1 - y2) * (x3 * y4 - y3 * x4)) / denom;
 
         return new Vector2((float)px, (float)py);
+    }
+
+    public static int UpdateMultiplePolygonPointsByPos(List<Polygon> polys, Vector2 pos, Vector2 newPos, float epsilon = .5f)
+    {
+        int count = 0;
+        polys.ForEach(p => 
+        { 
+            count += p.UpdateCheckPointsPosByPos(pos, newPos, epsilon); 
+        });
+        return count;
     }
 
     public static Vector2? GetIntersectionPoint(Vector2 p1, Vector2 p2, Vector2 p3, Vector2 p4)
@@ -180,5 +203,12 @@ public class VectorIntersect : MonoBehaviour
     internal static float GetAngleBetweenVectors(Vector2 pos1, Vector2 center, Vector2 pos2)
     {
         return Vector2.SignedAngle(center - pos1, center - pos2);
+    }
+
+    internal static float GetAngleByDistToPerpInters(Vector2 pos1, Vector2 center, Vector2 pos2)
+    {        
+        var inters = GetPerpendicularIntersection(pos1, pos2, center);
+
+        return 999;
     }
 }

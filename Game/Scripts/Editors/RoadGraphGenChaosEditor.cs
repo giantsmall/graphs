@@ -40,6 +40,8 @@ namespace Assets.Game.Scripts.Editors
             gg.InnerVoronoiSize = EditorGUILayout.FloatField(nameof(gg.InnerVoronoiSize), gg.InnerVoronoiSize);
             gg.InnerCirDistrictCount = EditorGUILayout.IntField(nameof(gg.InnerCirDistrictCount), gg.InnerCirDistrictCount);
             gg.mainRoadsCount = EditorGUILayout.IntField(nameof(gg.mainRoadsCount), gg.mainRoadsCount);
+            
+            gg.FlattenTriangles = EditorGUILayout.Toggle(nameof(gg.FlattenTriangles), gg.FlattenTriangles);
 
             gg.PolishInnerCircle = EditorGUILayout.Toggle(nameof(gg.PolishInnerCircle), gg.PolishInnerCircle);
             gg.CreateLots = EditorGUILayout.Toggle(nameof(gg.CreateLots), gg.CreateLots);

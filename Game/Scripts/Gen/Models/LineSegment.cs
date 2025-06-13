@@ -140,7 +140,7 @@ namespace Assets.Game.Scripts.Gen.Models
             var p2 = this.p1.pos;
             var p3 = s.p0.pos;
             var p4 = s.p1.pos;
-            return VectorIntersect.GetIntersectionPoint(p1, p2, p3, p4);
+            return Vector.GetIntersectionPoint(p1, p2, p3, p4);
         }
 
         public bool Intersects(LineSegment s)
@@ -231,7 +231,7 @@ namespace Assets.Game.Scripts.Gen.Models
             {
                 for (int j = 0; j < path.points.Count - 1; j++)
                 {
-                    var intersection = VectorIntersect.GetIntersectionPoint(points[i].pos, points[i + 1].pos,
+                    var intersection = Vector.GetIntersectionPoint(points[i].pos, points[i + 1].pos,
                                                                                 path.points[j].pos, path.points[j + 1].pos);
                     if (intersection != null)
                     {
@@ -331,7 +331,7 @@ namespace Assets.Game.Scripts.Gen.Models
             {
                 for (int j = 1; j < r1PtsTillGts.Count - 1; j++)
                 {
-                    var intersPoint = VectorIntersect.GetIntersectionPoint(r0PtsTillGts[i - 1], r0PtsTillGts[i], r1PtsTillGts[j - 1], r1PtsTillGts[j]);
+                    var intersPoint = Vector.GetIntersectionPoint(r0PtsTillGts[i - 1], r0PtsTillGts[i], r1PtsTillGts[j - 1], r1PtsTillGts[j]);
                     if (intersPoint.HasValue)
                     {
                         LineSegment roadToMergeTo = null;
