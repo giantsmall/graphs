@@ -141,6 +141,18 @@ namespace Assets.Game.Scripts.Gen.Models
             var pt = points.Where(p => p.Id == point.Id).FirstOrDefault();
             return pt != null;
         }
+
+        public bool ContainsAnyCheckpoint(params PtWSgmnts[] points)
+        {
+            foreach (var point in points)
+            {
+                if(this.ContainsCheckpoint(point))
+                
+                    return true;
+            }
+            return false;
+        }
+
         public bool ContainsCheckpoints(params PtWSgmnts[] points)
         {
             foreach (var point in points)
@@ -285,16 +297,15 @@ namespace Assets.Game.Scripts.Gen.Models
             return Math.Abs(pt.x - x) < epsilon || Math.Abs(pt.y - y) < epsilon;
         }
 
-        public bool ContainsPoint(PtWSgmnts p)
+        public bool ContainsPoint(PtWSgmnts p, bool edgeCounts = false)
         {
             if (this.ContainsCheckpoint(p))
                 return true;
-            return this.ContainsPoint(p.pos);
+            return this.ContainsPoint(p.pos, edgeCounts);
         }
 
         public int NumberOfPolygonsOverlapping(List<Polygon> p)
         {
-
             return 0;
             //for (int i = 0; i < this.points.Count; i++)
             //{
@@ -308,7 +319,7 @@ namespace Assets.Game.Scripts.Gen.Models
         }
 
 
-        public bool ContainsPoint(Vector2 p)
+        public bool ContainsPoint(Vector2 p, bool edgeCounts = false)
         {
             var poly = points.Select(p => p.pos).ToArray();
             Vector2 p1, p2;
@@ -343,6 +354,20 @@ namespace Assets.Game.Scripts.Gen.Models
                     inside = !inside;
                 }
                 oldPoint = newPoint;
+            }
+
+            if (!inside && edgeCounts)
+            {
+                for (int i = 0; i < poly.Length; i++)
+                {
+                    var pt = poly[i];
+                    var nextPt = poly[(i + 1) % poly.Length];
+                    var isPtOnLine = ParcelGenerator.IsPointOnSegment(p, pt, nextPt);
+                    if (isPtOnLine)
+                    {                        
+                        return true;
+                    }
+                }
             }
             return inside;
         }
@@ -578,7 +603,10 @@ namespace Assets.Game.Scripts.Gen.Models
 
         public void InsertCheckpoint(PtWSgmnts p, int index)
         {
-            this.points.Insert(index, p);
+            if (!this.ContainsCheckpoint(p))
+            {
+                this.points.Insert(index, p);
+            }
             p.AddParentPolygon(this);
         }
 
@@ -658,6 +686,18 @@ namespace Assets.Game.Scripts.Gen.Models
             }
         }
 
+        internal LineSegment GetLongestEdge()
+        {
+            var list = new List<float>();
+            for (int i = 0; i < this.points.Count; i++)
+            {
+                list.Add(points[i].DistanceTo(points.Neighbour(i, 1)));
+            }
+
+            var minIndex = list.IndexOf(list.Where(v => v > 0).Max());
+            return new LineSegment(points[minIndex], points.Neighbour(minIndex, 1));
+        }
+
         internal LineSegment GetshortestEdge()
         {
             var list = new List<float>();
@@ -713,7 +753,6 @@ namespace Assets.Game.Scripts.Gen.Models
                 var pI = this.points[i];
                 var prevP = this.points.Neighbour(i, -1);
                 var nextP = this.points.Neighbour(i, 1);
-                //angle = Vector.GetAngleBetweenVectors(prevP.pos, pI.pos, nextP.pos, signed);
                 var angle = Vector.GetInternalAngle(prevP.pos, pI.pos, nextP.pos);
                 angles.Add(Mathf.Round(angle));
             }
@@ -735,7 +774,7 @@ namespace Assets.Game.Scripts.Gen.Models
                 }
             }
             if(count > 0)
-                Debug.LogWarning($"{count} duplicates removed from polyon");
+                Debug.Log($"{count} duplicates removed from polyon");
             return;
             var ptsWithSamePos = this.points.GroupBy(p => p.pos).Where(g => g.Count() > 1).SelectMany(g => g.Skip(1)).ToList();
             if (ptsWithSamePos.Count > 0)
@@ -872,9 +911,17 @@ namespace Assets.Game.Scripts.Gen.Models
             this.points.Clear();
         }
 
-        internal void RemoveCheckPoints(params PtWSgmnts[] ptWSgmnts)
+        internal void RemoveCheckPoint(PtWSgmnts pt, bool goToPt = true)
+        {
+            this.points.Remove(pt);
+            if(goToPt)
+                pt.RemoveFromParentPolygon(this);
+        }
+
+        internal void RemoveCheckPoints(params PtWSgmnts[] pts)
         {            
-            this.points.RemoveList(ptWSgmnts.ToList());
+            this.points.RemoveList(pts.ToList());
+            pts.ToList().ForEach(p => p.RemoveFromParentPolygon(this));
         }
 
         public static void DrawParentCountPerPt(params Polygon[] polys)
@@ -915,19 +962,223 @@ namespace Assets.Game.Scripts.Gen.Models
             }
             else
             {
-                var first = mutualPoints.First();
+                var first = mutualPoints.First();                
                 var last = mutualPoints.Last();
-                var ptsInBetween = mutualPoints.TakeRangeBetween(1, mutualPoints.Count - 2);
-
+                var ptsInBetween = mutualPoints.Except(first).Except(last).ToList();
                 var indexOfFirst = this.points.IndexOf(first);
-                this.points = points.Except(ptsInBetween).ToList();
-                this.InsertCheckpoints(indexOfFirst + 1, remainingPoints.Reversed().ToArray());
+                this.InsertCheckpoints(indexOfFirst + 1, remainingPoints.ToArray());
+                this.RemoveCheckPoints(ptsInBetween.ToArray());
             }
         }
 
         public List<PtWSgmnts> FindMutualPoints(Polygon polygon)
         {
             return polygon.Points.Where(p => this.ContainsCheckpoint(p)).ToList();
+        }
+
+        internal PtWSgmnts Neighbour(PtWSgmnts furthestPt, int differenceToNeigh)
+        {
+            var index = this.points.IndexOf(furthestPt);
+            return this.Neighbour(index, differenceToNeigh);
+        }
+
+        internal float GetInnerAngleOf(PtWSgmnts pt)
+        {
+            var ind = this.points.IndexOf(pt);
+            var next = this.points.Neighbour(ind, 1);
+            var prev = this.points.Neighbour(ind, -1);
+            var angle = Vector.GetInternalAngle(prev.pos, pt.pos, next.pos);
+            return angle;
+        }
+
+        internal List<LineSegment> GetAdjacentEdges(LineSegment shortEdge)
+        {
+            var p0 = this.points.First(p => p.Id == shortEdge.p0.Id);
+            var p1 = this.points.First(p => p.Id == shortEdge.p1.Id);
+            var p0Index = this.points.IndexOf(p0);
+            var p1Index = this.points.IndexOf(p1);
+
+            var max = Math.Max(p0Index, p1Index);
+            var min = Math.Min(p0Index, p1Index);
+            if(min == 0 && max == this.Count - 1)
+            {
+                var next = this[max - 1];
+                var prev = this[min + 1];
+                var prevSegment = new LineSegment(points[min], prev);
+                var nextSegment = new LineSegment(points[max], next);
+                return new List<LineSegment>() { prevSegment, nextSegment };
+            }
+            else
+            {
+                var next = this.Neighbour(max, 1);
+                var prev = this.Neighbour(min, -1);
+                var prevSegment = new LineSegment(points[min], prev);
+                var nextSegment = new LineSegment(points[max], next);
+                return new List<LineSegment>() { prevSegment, nextSegment };
+            }
+        }
+
+        internal bool ContainsEdge(LineSegment edge)
+        {
+            throw new NotImplementedException();
+        }
+
+        /// <summary>
+        /// working but result does not make lines perpendicular
+        /// </summary>
+        /// <param name="spacing"></param>
+        /// <returns></returns>
+        /// <exception cref="System.ArgumentException"></exception>
+        public List<Polygon> SubdivideQuad(float spacing)
+        {
+            if(this.Count != 4)
+                throw new System.ArgumentException("Input polygon must be a quad with 4 vertices.");
+
+            Vector2 a = this[0].pos;
+            Vector2 b = this[1].pos;
+            Vector2 c = this[2].pos;
+            Vector2 d = this[3].pos;
+
+            // Za³o¿enie: dzielimy od AB do DC
+            // Znajdujemy d³ugoœæ przekroju (od AB do DC)
+            float length = Vector2.Distance(a, d);
+            Vector2 dirLeft = (d - a).normalized;
+            Vector2 dirRight = (c - b).normalized;
+
+            int segments = Mathf.FloorToInt(length / spacing);
+            List<List<Vector2>> result = new();
+
+            for (int i = 0; i < segments; i++)
+            {
+                float t0 = (i * spacing) / length;
+                float t1 = ((i + 1) * spacing) / length;
+
+                Vector2 left0 = Vector2.Lerp(a, d, t0);
+                Vector2 right0 = Vector2.Lerp(b, c, t0);
+                Vector2 left1 = Vector2.Lerp(a, d, t1);
+                Vector2 right1 = Vector2.Lerp(b, c, t1);
+
+                result.Add(new List<Vector2> { left0, right0, right1, left1 });
+            }
+
+            return result.Select(r => new Polygon(r)).ToList();
+        }
+
+        public (Polygon quad, Polygon leftTriangle, Polygon rightTriangle)
+        SubdivideTrapezoidOLD()
+        {
+            var trapezoid = this;
+            if (trapezoid == null || trapezoid.Points.Count != 4)
+                throw new System.ArgumentException("Polygon must have exactly 4 points (trapezoid).");
+
+            var longestEdge = this.GetLongestEdge();
+            var remEdge = this.points.Except(longestEdge.EdgePoints).ToList();
+            
+            Vector2 A = longestEdge.p0.pos;// lewy dolny
+            Vector2 B = longestEdge.p1.pos;// prawy dolny
+
+            var nextToB = this.points.GetNeighbour(longestEdge.p1, 1);
+            if(nextToB.Id == longestEdge.p0.Id)
+            {
+                nextToB = this.points.GetNeighbour(longestEdge.p1, -11);
+            }
+
+            Vector2 C = nextToB.pos;
+            Vector2 D = remEdge.Except(nextToB).First().pos; // lewy górny
+
+            float lenBottom = Vector2.Distance(A, B);
+            float lenTop = Vector2.Distance(D, C);
+
+            if (lenTop >= lenBottom)
+                throw new System.ArgumentException("Top base must be shorter than bottom base.");
+
+            float cut = (lenBottom - lenTop) / 2f;
+
+            Vector2 dirAB = (B - A).normalized;
+            Vector2 E = A + dirAB * cut; // nowy lewy dolny
+            Vector2 F = B - dirAB * cut; // nowy prawy dolny
+
+            Polygon middleQuad = new(new List<Vector2> { E, F, C, D });
+            Polygon leftTriangle = new(new List<Vector2> { A, E, D });
+            Polygon rightTriangle = new(new List<Vector2> { F, B, C });
+            return (middleQuad, leftTriangle, rightTriangle);
+        }
+
+
+        public (Polygon quad, Polygon leftTriangle, Polygon rightTriangle)
+       SubdivideTrapezoid()
+        {
+            var trapezoid = this;
+            if (trapezoid == null || trapezoid.Points.Count != 4)
+                throw new System.ArgumentException("Polygon must have exactly 4 points (trapezoid).");
+
+            var bottomEdge = this.GetLongestEdge();
+            var remEdge = this.points.Except(bottomEdge.EdgePoints).ToList();
+
+            var topPt = this.points.GetNeighbour(bottomEdge.p1, 1);
+            if (topPt.Id == bottomEdge.p0.Id)
+            {
+                topPt = this.points.GetNeighbour(bottomEdge.p1, -11);
+            }
+            var otherTopPt = remEdge.Except(topPt).First();
+
+            var perpInt1 = new PtWSgmnts(Vector.GetPerpendicularIntersection(bottomEdge.p0, bottomEdge.p1, topPt));
+            var perpInt2 = new PtWSgmnts(Vector.GetPerpendicularIntersection(bottomEdge.p0, bottomEdge.p1, otherTopPt));
+
+            var quad = new Polygon(perpInt1, perpInt2, bottomEdge.p0, bottomEdge.p1);
+            var tr1 = new Polygon(topPt, perpInt1, bottomEdge.p1);
+            var tr2 = new Polygon(otherTopPt, perpInt2, bottomEdge.p0);
+
+            return (quad, tr1, tr2);
+        }
+
+        internal (Polygon, Polygon) DivideByOffsetPerpToLongestEdge()
+        {
+            var avgHeight = 0;
+            //var inters1 = GetOffsetAndInters(nextP, rnDep, poly[i], prevP, poly);
+            var longestEdge = this.GetLongestEdge();
+            var rempts = this.points.Except(longestEdge.EdgePoints).ToList();
+            var offsetPts = ParcelGenerator.GetOffsetLine(longestEdge.p0.pos, longestEdge.p1.pos, 1f, 20, this.GetVectors());
+
+            var adjEdges = this.GetAdjacentEdges(longestEdge);
+
+            var intersPos1 = Vector.GetIntersectionPoint(adjEdges[0].p0.pos, adjEdges[0].p1.pos, offsetPts.Item1, offsetPts.Item2);
+            var intersPos2 = Vector.GetIntersectionPoint(adjEdges[^1].p0.pos, adjEdges[^1].p1.pos, offsetPts.Item1, offsetPts.Item2);
+            PtWSgmnts inters1 = new(intersPos1.Value);
+            PtWSgmnts inters2 = new(intersPos2.Value);
+
+            var bottomPoly = new Polygon(longestEdge.p0, longestEdge.p1, inters1, inters2);
+            bottomPoly.ReorderPointsByAngleCW();
+            var topPoly = new Polygon(rempts[0], rempts[^1], inters1, inters2);
+            topPoly.ReorderPointsByAngleCW();
+            return (topPoly, bottomPoly);
+        }
+
+        internal List<float> GetLongestEdgeAngles()
+        {
+            var edge = this.GetLongestEdge();
+            var ang1 = this.GetInnerAngleOf(edge.p0);
+            var ang2 = this.GetInnerAngleOf(edge.p1);
+            return new List<float>() { ang1, ang2 };
+        }
+    }
+
+    public class PolygonComparer : IEqualityComparer<Polygon>
+    {
+        public bool Equals(Polygon x, Polygon y)
+        {
+            var area = x.CalculateArea() == y.CalculateArea();
+            var points = x.ContainsCheckpointsByPos(y.Points) == x.Count;
+            if(area != points)
+            {
+                Debug.LogError("Strange comparison..");
+            }
+            return area && points;
+        }
+
+        public int GetHashCode(Polygon obj)
+        {
+            return obj.GetHashCode();
         }
     }
 }

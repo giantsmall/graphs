@@ -187,7 +187,6 @@ public class Vector : MonoBehaviour
         return H;
     }
 
-
     public static Vector2 ExtendSegment(Vector2 start, Vector2 end, float extensionLength)
     {
         Vector2 direction = (end - start).normalized;

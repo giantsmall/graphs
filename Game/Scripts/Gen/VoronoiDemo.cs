@@ -107,7 +107,7 @@ public class VoronoiDemo : MonoBehaviour
         UseRemovedTrianglesForMajorPaths(removedTriangulation);
 
         //from edges having angle smaller than 15deg remove longer one
-        spanningTree.ForEach((LineSegment line) => { line.ExtendIfBelow(minCitiesDistance); });
+        spanningTree.ForEach((LineSegment line) => { line.ExtendToGivenLen(minCitiesDistance); });
         spanningTree.ForEach((LineSegment line) => 
         { 
             //line.SplitAndDistortOnWorldMap(rnd, maxRoadSegmentLength);

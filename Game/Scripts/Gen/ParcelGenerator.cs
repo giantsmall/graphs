@@ -193,13 +193,20 @@ namespace Assets.Game.Scripts.Gen
             var avgLen = edgesLens.Average();
             var blockArea = block.CalculateArea();            
             var minArea = minDepth * minWidth;
-            Debug.Log($"Shortest len to average ratio = {shortestEdge / (avgLen / 2f)}");
-            Debug.Log($"Shortest len wider than min width: {shortestEdge} vs {minWidth}");
-            Debug.Log($"Area: {blockArea}, min = {minArea}");
+            //Debug.Log($"Shortest len to average ratio = {shortestEdge / (avgLen / 2f)}");
+            //Debug.Log($"Shortest len wider than min width: {shortestEdge} vs {minWidth}");
+            //Debug.Log($"Area: {blockArea}, min = {minArea}");
 
             var result = new List<Polygon>();
-            var shortestLenCondition = shortestEdge > maxWidth && shortestEdge > avgLen / 2f;
+            var shortestLenCondition = shortestEdge > Math.Max(maxWidth, avgLen / 3f);
             var minAreaConditionMet = blockArea > minArea;
+
+            if(!shortestLenCondition)
+            {
+                var pt = block[shortestEdgeIndex];
+                var nextPt = block.Neighbour(shortestEdgeIndex, 1);
+                //RoadGraphGenChaos.tooShortLines.Add(new LineSegment(pt, nextPt));                
+            }
 
             if(!minAreaConditionMet)
             {
@@ -243,6 +250,7 @@ namespace Assets.Game.Scripts.Gen
             {
                 var niceRect = shortestLenCondition;
                 var deepEnough = dists.All(d => d > minDepth);
+                var bottomAnglesAcute = block.GetLongestEdgeAngles().All(a => a <= 90);
                 if (niceRect && deepEnough)
                 {
                     result = MakeLotsBasedOnAngle(rnd, block, minDepth, maxDepth, minWidth, maxWidth, maxSmallAngle);
@@ -253,21 +261,27 @@ namespace Assets.Game.Scripts.Gen
                 }
                 else if(deepEnough && longestEdge > 2 * minWidth)
                 {
-                    result = MakeTwoLotLayerPerpToLongestEdge(rnd, block, minDepth, maxDepth, minWidth, maxWidth);
+                    if(bottomAnglesAcute)                    
+                        result = MakeTwoLotLayerPerpToLongestEdge(rnd, block, minDepth, maxDepth, minWidth, maxWidth);
+
+                }
+                else
+                {
+                    Debug.LogWarning("Rectangle not nice enough");
                 }
             }
             
             //pentagon
             if (block.Count >= 5)
             {
-                var pentagonNiceAndSmooth = shortestLenCondition;
+                var pentagonNiceAndSmooth = shortestLenCondition || true;
                 if (pentagonNiceAndSmooth)
                 {
                     result = MakeLotsBasedOnAngle(rnd, block, minDepth, maxDepth, minWidth, maxWidth, maxSmallAngle);
                 }
                 else
                 {
-                    Debug.LogWarning("Pentagon not nice enough");
+                    Debug.LogWarning("Pentagon not nice enough: shortestLenCondition");
                 }
             }
             return result;
@@ -303,19 +317,8 @@ namespace Assets.Game.Scripts.Gen
             //if opposite angle is different stay
             //for more less regular/circular cycle
 
-            var angles = new List<float>();
-            var depths = new List<float>();
-            for (int i = 0; i < poly.Count; i++)
-            {
-                var prevP = poly[(i - 1 + poly.Count) % poly.Count];
-                var nextP = poly[(i + 1) % poly.Count];
-                var edge = prevP - poly[i];
-                var nextEdge = nextP - poly[i];
-                var angle = Vector2.Angle(edge, nextEdge);
-                angles.Add(angle);
-                depths.Add(rnd.NextFloat(minDepth, maxDepth));
-            }
-
+            var angles = new Polygon(poly).GetInnerAngles(); // new List<float>();
+            var depths = angles.Select(a => rnd.NextFloat(minDepth, maxDepth)).ToList();
             List<LotPts> lotPtsList = new List<LotPts>();
 
             var maxInnerWidth = maxDepth / 2f;
@@ -395,33 +398,22 @@ namespace Assets.Game.Scripts.Gen
         public static List<Polygon> MakeSingleLotLayerPerpToLongestEdge(System.Random rnd, Polygon poly, float minDepth, float maxDepth, float minWidth, float maxWidth)
         {
             //throw new Exception("MakeSingleLotLayerPerpToLongestEdge - Work in progress");
-            var longestEdge = poly.GetEdgeLengths().OrderBy(l => l).First();
-            var longestEdgeIndex = poly.GetEdgeLength(longestEdge);
+            var longestEdge = poly.GetLongestEdge();
+            var longestEdgeIndex = poly.Points.IndexOf(longestEdge.p0);
             var lots = new List<List<Vector2>>();
             var lotWidths = new List<float>();
-            if (longestEdge > maxWidth)
+            var len = longestEdge.Length;
+
+            if (len > maxWidth)
             {
-                lotWidths.AddRange(longestEdge.GetRandomSplit(minWidth, maxWidth, rnd));
+                lotWidths.AddRange(len.GetRandomSplit(minWidth, maxWidth, rnd));
             }
-            else lotWidths.Add(longestEdge);
+            else lotWidths.Add(len);
 
             var prevLotLastDeep = Vector2.zero; //intersect any edge perp to longestOne at its start? or just take any vertext
             var prevLotLastShallow = poly[longestEdgeIndex].pos;
-            foreach (var lotW in lotWidths)
-            {
-                var t = lotW / longestEdge;
-                longestEdge -= lotW;
-                var newLastShallow = Vector2.Lerp(prevLotLastShallow, poly.Neighbour(longestEdgeIndex, 1).pos, t);
-                var newLastDeep = Vector2.zero; //intersect any edge perp to longestOne
-
-                var lot = new List<Vector2>() { newLastDeep, prevLotLastDeep, prevLotLastShallow, newLastShallow };
-                lots.Add(lot);
-
-                prevLotLastDeep = newLastDeep;
-                prevLotLastShallow = newLastShallow;
-            }
-
-            return lots.Select(l => new Polygon(l)).ToList();
+            var (poly1, poly2, poly3) = poly.SubdivideTrapezoid();
+            return new List<Polygon>() { poly1, poly2, poly3 };
         }
 
         public static List<Vector2> MakeSingleLot(Polygon poly)
@@ -432,9 +424,12 @@ namespace Assets.Game.Scripts.Gen
 
         public static List<Polygon> MakeTwoLotLayerPerpToLongestEdge(System.Random rnd, Polygon poly, float minDepth, float maxDepth, float minWidth, float maxWidth)
         {
-            Debug.LogWarning($"Not Implemented: {nameof(MakeTwoLotLayerPerpToLongestEdge)}");
             var lots = new List<Polygon>();
-            return lots;
+            var polys = poly.DivideByOffsetPerpToLongestEdge();            
+            var tr = polys.Item1.SubdivideTrapezoid();
+            var tr2 = polys.Item2.SubdivideTrapezoid();
+
+            return new List<Polygon>() { tr.quad, tr.leftTriangle, tr.rightTriangle, tr2.quad, tr2.leftTriangle, tr2.rightTriangle };
         }
 
         public static float PerpendicularDistance(LineSegment line, PtWSgmnts point)
@@ -480,10 +475,10 @@ namespace Assets.Game.Scripts.Gen
         static (Vector2, Vector2, Vector2) MeetIntersAndGetShallowMeetsForSmallAngle(List<Vector2> p, int vIndex, float distance, float nextDistance)
         {
             var currP = p[vIndex];
-            var prevP = p[(vIndex - 1 + p.Count) % p.Count];
-            var nextP = p[(vIndex + 1) % p.Count];
-            var offset1 = GetOffsetLine(prevP, currP, distance, (prevP - currP).magnitude / 2f, p);
-            var offset2 = GetOffsetLine(nextP, currP, nextDistance, (nextP - currP).magnitude / 2f, p);
+            var prevP = p.Neighbour(vIndex, -1);
+            var nextP = p.Neighbour(vIndex, 1);
+            var offset1 = GetOffsetLine(prevP, currP, distance, (prevP - currP).magnitude * 2, p);
+            var offset2 = GetOffsetLine(nextP, currP, nextDistance, (nextP - currP).magnitude * 2, p);
             var inters = Vector.GetIntersectionPoint(offset1.Item1, offset1.Item2, offset2.Item1, offset2.Item2);
             Vector2 shallowPrev = Vector2.zero, shallowNext = Vector2.zero;
             if (inters.HasValue)
@@ -493,6 +488,9 @@ namespace Assets.Game.Scripts.Gen
             }
             else
             {
+                GizmosDrawer.DrawRay(currP, Color.cyan);
+                GizmosDrawer.DrawRay(nextP, Color.cyan);
+                GizmosDrawer.DrawRay(prevP, Color.cyan);
                 Debug.DrawLine(offset1.Item1, offset1.Item2, Color.red);
                 Debug.DrawLine(offset2.Item1, offset2.Item2, Color.blue);
             }

@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace Assets.Game.Scripts.Gen.Models
 {
-    public class Wall: LineSegment
+    public class Wall: Street
     {
         public Wall()
         {

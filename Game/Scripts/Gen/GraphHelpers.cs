@@ -254,7 +254,7 @@ namespace Assets.Game.Scripts.Gen
                     intersectingEdge.p0.pos = inters.Value;
                     return intersectingEdge.p0;
                 }
-                else if (!p.ContainsPoint(intersectingEdge.p1))
+                else if (!p.ContainsPoint(intersectingEdge.p1, false))
                 {
                     intersectingEdge.p1.pos = inters.Value;
                     return intersectingEdge.p1;

@@ -11,7 +11,7 @@ namespace Assets.Game.Scripts.Utility.NotAccessible
     {
         static string fileName = $"log_{DateTime.Now.ToFileTime()}.txt";
 
-        public static void Info(object text)
+        public static void InfoToFile(object text)
         {
             Debug.Log(text.ToString());
             EnterLine(text.ToString(), "INFO");

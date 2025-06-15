@@ -3,14 +3,17 @@ using Assets.Game.Scripts.Editors;
 using Assets.Game.Scripts.Gen.GraphGenerator;
 using Assets.Game.Scripts.Gen.Models;
 using Assets.Game.Scripts.Utility;
+using Assets.Game.Scripts.Utility.NotAccessible;
 using ClipperLib;
 using Delaunay;
 using NUnit.Framework;
+using NUnit.Framework.Constraints;
 using SharpGraph;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using Unity.VisualScripting;
 using UnityEngine;
 
 namespace Assets.Game.Scripts.Gen
@@ -27,6 +30,7 @@ namespace Assets.Game.Scripts.Gen
 
         public static Polygon MergeAdjacentPolygons(List<Polygon> polygonsToMerge)
         {
+            Log.InfoToFile("MergeAdjacentPolygons");
             List<Polygon> initPolys = polygonsToMerge.ToList();
             List<PtWSgmnts> initPts = initPolys.SelectMany(p => p.Points).Distinct(new PointsComparer(true)).ToList();
             
@@ -60,13 +64,16 @@ namespace Assets.Game.Scripts.Gen
                 mergedPoly.ReplacePointsWithSamePos(initPts);
 
                 mergedPoly.Points.ForEach(p => p.AddParentPolygon(mergedPoly));
-                //Polygon.DrawParentCountPerPt(mergedPoly);
             }
+            Log.InfoToFile("MergeAdjacentPolygons done.");
             return polygonsToMerge.First();
         }
 
-        public static Polygon IncludeDeepNeighbours(Polygon poly, List<Polygon> neighbours)
-        {            
+        static void StraightenOpenAnglesWithLenRatio(Polygon poly, List<Polygon> neighbours, float minRatio, bool draw = false)
+        {
+            Log.InfoToFile("Starting method StraightenOpenAnglesWithLenRatio");
+
+            int total = 0;
             int count = 0;
             do
             {
@@ -78,11 +85,10 @@ namespace Assets.Game.Scripts.Gen
                     if (angles[i] > 180)
                     {
                         var ratio = CalculateEdgeLengthRatio(poly, i);
-                        if (ratio > 2)
+                        if (ratio > minRatio)
                         {
                             var polyPoints = poly.Count;
-
-                            if (poly[i].parentCount <= 2)
+                            if (poly[i].parentCount == 2)
                             {
                                 count += poly[i].RemoveFromParentPolygons();
                                 angles = poly.GetInnerAngles();
@@ -97,53 +103,87 @@ namespace Assets.Game.Scripts.Gen
                     }
                 }
             }
-            while (count > 0);
+            while (count > 0 && total++ < 500);
+            if (total == 500)
+                Debug.LogError($"While iterations exceeded total");
+        }
 
-
+        static void AbsorbNeighbWithOpenAnglesWithLenRatio(Polygon poly, List<Polygon> neighbours, float maxRatio)
+        {
             var angs = poly.GetInnerAngles();
-            Debug.Log(angs.Join('_'));
-
-            foreach (var pt in poly.Points)
-            {
-                //GizmosDrawer.DrawRays(pt.pos, Color.red, pt.parentCount);
-            }
-
-            neighbours.ForEach(n => n.ReplacePointsWithSamePos(poly.Points));
-
-            angs = poly.GetInnerAngles();
+            Debug.Log(angs.Join(','));
+            int total = 0;
             for (int i = 0; i < angs.Count; i++)
             {
-                if (angs[i] > 180)
+                if (angs[i] > 250)
                 {
+                    total++;
                     var ratio = CalculateEdgeLengthRatio(poly, i);
                     Debug.Log($"RATIO: {ratio}");
-
                     if (ratio < 2)
                     {
-                        GizmosDrawer.DrawRay(poly[i].pos, Color.red);
-                        var neighs = poly[i].Parents.ToList(); 
+                        var neighs = poly[i].Parents.Except(poly).ToList();
                         var neighByPos = neighbours.Where(n => n.ContainsCheckpoint(poly[i])).ToList();
                         Debug.Log($"neighs COUNT: {neighs.Count}, byPos: {neighByPos.Count}");
-
-                        GizmosDrawer.DrawRays(neighByPos.Select(n => n.FindCenter()).ToList(), Color.red);
-
-                        if (neighByPos.Count == 1)
+                        if (neighs.Count == 1)
                         {
-                            //neighs.Add(poly);
-                            poly.AbsorbPolygon(neighByPos.First());
-                            neighbours.Remove(neighByPos.First());
-                            break;
+                            var pt = poly[i];
+
+                            pt.RemoveFromParentPolygon(poly);
+                            pt.RemoveFromParentPolygon(neighs.First());
+                            poly.AbsorbPolygon(neighs.First());
+
+                            poly.RemoveCheckPoint(pt);
+                            neighs.First().RemoveCheckPoint(pt);                            
+                            neighbours.Remove(neighs.First());
+                            i = 0;
+                            angs = poly.GetInnerAngles();
                         }
                     }
                 }
-                else if (angs[i] > 160)
-                {
-                    GizmosDrawer.DrawRay(poly[i].pos, Color.blue);
-
-                }
             }
+            if (total > 1000)
+            {
+                Debug.LogError("Total iterations exceeded 1000!.");
+                return;
+            }
+        }
+        public static void IncludeDeepNeighbours(Polygon poly, List<Polygon> neighbours)
+        {
+            Log.InfoToFile("Starting method IncludeDeepNeighbours");
+            StraightenOpenAnglesWithLenRatio(poly, neighbours, 2);
+            Log.InfoToFile("Starting method ReplacePointsWithSamePos");
+            ReplacePointsWithSamePos(neighbours, poly.Points);
+            Log.InfoToFile("Starting method RemoveNotExistingRelationShips");
+            RemoveNotExistingRelationShips(neighbours);
+            Log.InfoToFile("Starting method AbsorbNeighbWithOpenAnglesWithLenRatio");
+            AbsorbNeighbWithOpenAnglesWithLenRatio(poly, neighbours, 2);
+            Log.InfoToFile("Starting method ReplacePointsWithSamePos");
+            ReplacePointsWithSamePos(neighbours, poly.Points);
+            Log.InfoToFile("Starting method ReplacePointsWithSamePos");
+            StraightenOpenAnglesWithLenRatio(poly, neighbours, 1, true);
+            Log.InfoToFile("Starting method RemoveAnglesAround180Degrees");
+            RoadGraphGenChaos.RemoveAnglesAround180Degrees(poly, neighbours);
+            Log.InfoToFile("IncludeDeepNeighbours done");
+        }
 
-            return poly;
+
+        public static void ReplacePointsWithSamePos(List<Polygon> polygons)
+        {
+            var uniquePts = polygons.SelectMany(p => p.Points).Distinct(new PointsComparer()).ToList();
+            ReplacePointsWithSamePos(polygons, uniquePts);            
+        }
+
+        public static void ReplacePointsWithSamePos(List<Polygon> polygons, List<PtWSgmnts> points)
+        {
+            polygons.ForEach(n => n.ReplacePointsWithSamePos(points));
+        }
+
+
+        public static void RemoveNotExistingRelationShips(List<Polygon> polys)
+        {
+            var totalPoints = polys.SelectMany(p => p.Points).Distinct(new PointsComparer(true)).ToList();
+            totalPoints.ForEach(p => p.RemoveParentsIfNotPartOf());
         }
 
         static float CalculateEdgeLengthRatio(Polygon poly, int i)
@@ -190,14 +230,12 @@ namespace Assets.Game.Scripts.Gen
         {
             var pts = poly.Points.Select(p => p.pos).ToList();
             var edges = new List<(Vector2, Vector2)>();
-
             for (int i = 0; i < pts.Count; i++)
             {
                 var a = pts[i];
                 var b = pts[(i + 1) % pts.Count];
                 edges.Add((a, b));
             }
-
             return edges;
         }
 
@@ -214,7 +252,8 @@ namespace Assets.Game.Scripts.Gen
             result.Add(start);
             Vector2 current = edges[0].Item2;
 
-            while (current != start)
+            int total = 0;
+            while (current != start && total++ < 500)
             {
                 result.Add(current);
                 if (!edgeDict.ContainsKey(current) || edgeDict[current].Count == 0)
@@ -224,7 +263,134 @@ namespace Assets.Game.Scripts.Gen
                 edgeDict[current].RemoveAt(0);
                 current = next;
             }
+            if (total == 500)
+                Debug.LogError($"While iterations exceeded total");
             return result;
+        }
+
+        public static void MergeClosePoints(List<Polygon> polys, float epsilon = .1f)
+        {
+            foreach(var poly in polys)
+            {
+                MergeClosePoints(poly, epsilon);
+            }
+        }
+
+        public static void MergeClosePoints(Polygon pol, float epsilon = .1f)
+        {
+            pol.RemoveDuplicates();
+            for (int i = pol.Count - 1; i >= 0; i--)
+            {                
+                var pt = pol[i];
+                var prevP = pol.Neighbour(i, -1);
+                var prevIndex = pol.Points.IndexOf(prevP);
+
+                if (pt.DistanceTo(prevP) < epsilon)
+                {
+                    MergePoints(pt, prevP);
+                }
+            }
+        }
+
+        public static void MergePoints(PtWSgmnts ptToRemain, PtWSgmnts ptToRemove)
+        {            
+            if(ptToRemain.Id == ptToRemove.Id)
+            {
+                return;
+            }
+            ptToRemain.AddParentPolygons(ptToRemove.Parents);
+            
+            for (int i = ptToRemain.Parents.Count - 1; i >= 0; i--)
+            {
+                var p = ptToRemain.Parents[i];
+                var indexOfPtToRemove = p.Points.IndexOf(ptToRemove);
+                p.InsertCheckpoint(ptToRemain, indexOfPtToRemove);
+                p.RemoveCheckPoint(ptToRemove);
+            }
+        }
+        public static void MergePoints(PtWSgmnts ptToRemain, params PtWSgmnts[] ptsToRemove)
+        {
+            foreach(var ptToRemove in ptsToRemove)
+            {
+                MergePoints(ptToRemain, ptToRemove);
+            }
+        }
+
+        public static void FlattenAdjacentTriangles(List<Polygon> polys, Polygon boundaryPoly)
+        {
+            var innerCircCenter = boundaryPoly.FindCenter();
+            var neighbourBlocks = polys.Where(b => b.Points.Any(p => boundaryPoly.ContainsPoint(p))).ToList();
+            Debug.LogWarning($"NEIGHBOURS: {neighbourBlocks.Count}");
+            foreach (var neigh in neighbourBlocks)
+            {
+                neigh.RemovePointsWithSamePos();
+                var neighPtsOnBoundary = boundaryPoly.ContainsCheckpointsByPos(neigh.Points);
+
+                PtWSgmnts furthestPt = null;
+                try
+                {
+                    furthestPt = neigh.Points.First(p => !boundaryPoly.ContainsCheckpointPos(p));
+                }
+                catch (Exception e)
+                {
+                    GizmosDrawer.DrawRays(neigh.Points, Color.red);
+                    return;
+                }   
+                
+                if (neigh.Count == neighPtsOnBoundary + 1)
+                {
+                    var remainingPts = neigh.Points.Where(p => boundaryPoly.ContainsCheckpointPos(p)).ToList();
+                    furthestPt = neigh.Points.First(p => !boundaryPoly.ContainsCheckpointPos(p));
+                    Vector2 newPos = Vector2.zero;
+                    try
+                    {
+                        if(neigh.Count == 3)
+                            newPos = Vector.GetPerpendicularIntersection(remainingPts[0].pos, remainingPts[1].pos, furthestPt.pos);
+                        else
+                        {
+                            newPos = neigh.Neighbour(furthestPt, 2).pos;
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogError(e.Message);
+                        Debug.DrawRay(furthestPt.pos, Vector2.up, Color.red);
+                        if (remainingPts.Any())
+                        {
+                            Debug.DrawRay(remainingPts[0].pos, Vector2.up, Color.blue);
+                            Debug.DrawRay(remainingPts[1].pos, Vector2.up, Color.blue);
+                        }
+                        break;
+                    }
+                    polys.SelectMany(p => p.GetCheckpointsByPos(furthestPt))
+                         .ToList()
+                         .ForEach(p => { p.pos = newPos; });
+                    polys.Remove(neigh);
+
+                    boundaryPoly.InsertCheckpointByPos(newPos);
+                }
+            }
+            RemoveTooSmallPolygons(polys, boundaryPoly);
+        }
+
+        public static List<Polygon> RemoveTooSmallPolygons(List<Polygon> polys, Polygon innerCircle)
+        {
+            var polysToRemove = new List<Polygon>();
+            foreach(var poly in polys)
+            {
+                if (poly.CalculateArea() < 1)
+                {
+                    var innerCircPts = innerCircle.Points.Where(p => poly.ContainsCheckpoint(p)).ToList();
+                    var centerPt = innerCircPts.Any()? innerCircPts[0] : poly.Points.First();
+                    foreach (var pt in poly.Points)
+                    {
+                        pt.pos = centerPt.pos;
+                    }
+                    MergePoints(centerPt, poly.Points.Except(centerPt).ToArray());
+                    polysToRemove.Add(poly);
+                }
+            }
+            return polys.Except(polysToRemove).ToList();
         }
     }
 }

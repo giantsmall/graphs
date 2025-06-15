@@ -26,6 +26,7 @@ namespace Assets.Game.Scripts.Gen.Models
         public Street(List<PtWSgmnts> points, float thickness) : base(points, thickness)
         {
             this.Id = index++;
+            Debug.Log($"Street points count: {this.points.Count}");
         }
 
         public Street(PtWSgmnts start, PtWSgmnts end) : base()

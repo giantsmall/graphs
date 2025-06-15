@@ -697,6 +697,16 @@ namespace Assets.Game.Scripts.Utility
             }
             return (crossings % 2) == 1;
         }
+
+        public static float Round(this float val, int digits)
+        {
+            return MathF.Round(val, digits);
+        }
+
+        public static double Round(this double val, int digits)
+        {
+            return Math.Round(val, digits);
+        }
     }
 }
 

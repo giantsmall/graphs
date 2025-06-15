@@ -66,7 +66,7 @@ namespace Assets.Game.Scripts.Gen.Models
         
         public Wall Citadel { get; set; } = new Wall();
         
-        public Street innerCircleStreet = new();
+        public Street innerStreet = new();
         public Street moatStreet = new();
         //buildings
         public List<BuildingModel> buildings { get; protected set; } = new();

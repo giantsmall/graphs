@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace Assets.Game.Scripts.Gen.Models
 {
-    public class Moat : LineSegment
+    public class Moat : Street
     {
         public Moat()
         {

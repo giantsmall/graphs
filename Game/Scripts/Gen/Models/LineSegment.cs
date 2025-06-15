@@ -1,11 +1,12 @@
-using UnityEngine;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using Assets.Game.Scripts.Gen.Models;
 using Assets.Game.Scripts.Utility;
+using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Security.Cryptography;
+using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace Assets.Game.Scripts.Gen.Models
 {
@@ -202,20 +203,25 @@ namespace Assets.Game.Scripts.Gen.Models
             this.InnerCircleInters = castleGate;
         }
 
-        public void ExtendIfBelow(float minLength)
-        {            
-            ExtendIfBelow(minLength, this.Length - minLength);
-        }
-
-        public void ExtendIfBelow(float minLength, float missingLength)
+        public void ExtendToGivenLen(float minLength)
         {
+            this.CalculateLength();
             if (this.Length < minLength)
             {
-                var middlePoint = Vector2.Lerp(p0.pos, p1.pos, 0.5f);
-                var lenToCenter = middlePoint.DistanceTo(this.p1.pos);
-                this.p0.pos += (middlePoint - this.p0.pos) * (1 + missingLength / lenToCenter);
-                this.p1.pos += (middlePoint - this.p1.pos) * (1 + missingLength / lenToCenter);
-                this.CalculateLength();
+                float missingLen = minLength - Length;
+                Vector2 direction = (p1.pos - p0.pos).normalized;
+                p0.pos -= direction * missingLen / 2f;
+                p1.pos += direction * missingLen / 2f;
+
+                //float oldLen = this.Length;
+                
+                //var middlePoint = Vector2.Lerp(p0.pos, p1.pos, 0.5f);
+                //var lenToCenter = middlePoint.DistanceTo(this.p1.pos);
+                //this.p0.pos += (middlePoint - this.p0.pos);// * (1 + missingLength / lenToCenter);
+                //this.p1.pos += (middlePoint - this.p1.pos);// * (1 + missingLength / lenToCenter);
+                //this.CalculateLength();
+
+                //Debug.Log($"SEGMENT Extended by : {this.Length - oldLen}");
             }
         }
 
@@ -460,7 +466,7 @@ namespace Assets.Game.Scripts.Gen.Models
             }
             return this;
         }
-        internal int ReplaceEdgePointWithSamePos(LineSegment line, List<LineSegment> allEdges)
+        internal int ReplaceEdgePointWithSamePos(LineSegment line)
         {
             int count = 0;
             var ptToReplace = this.p1;
@@ -478,7 +484,6 @@ namespace Assets.Game.Scripts.Gen.Models
             }
             line.p1.AddNeighbours(anotherPtToReplace.Neighbours);
             anotherPtToReplace = line.p0;
-
 
             if (count > 1)
             {

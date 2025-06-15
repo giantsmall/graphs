@@ -49,6 +49,7 @@ namespace Assets.Game.Scripts.Editors
             gg.RoadWidth = EditorGUILayout.FloatField(nameof(gg.RoadWidth), gg.RoadWidth);
             gg.MinBlockAreaToPutShortEdgesAway = EditorGUILayout.FloatField(nameof(gg.MinBlockAreaToPutShortEdgesAway), gg.MinBlockAreaToPutShortEdgesAway);
 
+            gg.RoadWidth = EditorGUILayout.FloatField(nameof(gg.RoadWidth), gg.RoadWidth);
             GUILayout.Box("Wall settings", GUILayout.ExpandWidth(true));
             gg.BuildWall = EditorGUILayout.Toggle(nameof(gg.BuildWall), gg.BuildWall);
             if (gg.BuildWall)

@@ -110,6 +110,7 @@ namespace Assets.Game.Scripts.Editors
                 {
                     Gizmos.DrawSphere(edge.p0.pos + dist, sphereSize);
                     Gizmos.DrawSphere(edge.p1.pos + dist, sphereSize);
+                    dist += dist;
                 }
             }
         }
@@ -171,6 +172,13 @@ namespace Assets.Game.Scripts.Editors
             DrawSpheres(list, shift, circleSize);
             if (looped)
                 Gizmos.DrawLine(list.Last().pos + shift, list.First().pos + shift);
+        }
+
+
+
+        internal static void DrawRay(PtWSgmnts value, Color color)
+        {
+            DrawRay(value.pos, color);
         }
 
         internal static void DrawRay(Vector2 value, Color color)

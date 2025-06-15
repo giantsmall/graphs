@@ -11,7 +11,7 @@ namespace Assets.Game.Scripts.Gen
 {
     public static class FaceExtractor3
     {
-        public static List<List<PtWSgmnts>> ExtractMinimalCoveringFacesIterative(List<LineSegment> edges, int iterations = 10)
+        public static List<Polygon> ExtractMinimalCoveringFacesIterative(List<LineSegment> edges, int iterations = 10)
         {
             var allEdges = new HashSet<string>(edges.OrderBy(e => e.Id).Select(e => EdgeKey(e.p0.Id, e.p1.Id)));
             var allCycles = new List<List<PtWSgmnts>>();
@@ -60,7 +60,7 @@ namespace Assets.Game.Scripts.Gen
             }
             var keys = result.OrderBy(r => r.Count).Select(r => GetCycleKey(r)).ToList();
 
-            return result;
+            return result.Select(r => new Polygon(r)).ToList();
         }
 
         static void RemoveDuplicateCycles(ref List<List<PtWSgmnts>> allCycles)
@@ -115,7 +115,7 @@ namespace Assets.Game.Scripts.Gen
                     .ToList();
             }
 
-            foreach (var from in graph.Keys.OrderBy(_ => rng.Next()))
+            foreach (var from in graph.Keys.OrderBy(_ => rng.Next())) //
             {
                 foreach (var to in graph[from])
                 {

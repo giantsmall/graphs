@@ -224,19 +224,25 @@ namespace Assets.Game.Scripts.Gen.Models
         public int parentCount => parentPolygons.Count;
         List<Polygon> parentPolygons = new List<Polygon>();
         public List<Polygon> Parents => parentPolygons;
-        internal int RemoveFromParentPolygons()
+        internal int RemoveFromParentPolygons(bool goToPolygon = true)
         {
             int count = 0;
             foreach (var poly in parentPolygons)
             {
-                poly.RemoveCheckPoints(this);
+                poly.RemoveCheckPoint(this, false);
                 count++;
             }
             parentPolygons.Clear();
             return count;
-              
         }
 
+        internal void AddParentPolygons(List<Polygon> parents)
+        {
+            foreach (var poly in parents)
+            {
+                AddParentPolygon(poly);
+            }
+        }
         internal void AddParentPolygon(Polygon polygon)
         {
             this.parentPolygons.Add(polygon);
@@ -246,6 +252,11 @@ namespace Assets.Game.Scripts.Gen.Models
         internal void RemoveFromParentPolygon(Polygon polygon)
         {
             this.parentPolygons.Remove(polygon);
+        }
+
+        internal void RemoveParentsIfNotPartOf()
+        {
+            this.parentPolygons = parentPolygons.Where(p => p.ContainsCheckpoint(this)).ToList();
         }
     }
 
